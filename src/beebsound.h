@@ -1,7 +1,7 @@
 
 /****************************************************************************/
-/*              Beebem - (c) David Alan Gilbert 1994                        */
-/*              ------------------------------------                        */
+/*              Beebem - (c) David Alan Gilbert 1994/1995                   */
+/*              -----------------------------------------                   */
 /* This program may be distributed freely within the following restrictions:*/
 /*                                                                          */
 /* 1) You may not charge for this program or for any part of it.            */
@@ -19,26 +19,30 @@
 /* program.                                                                 */
 /* Please report any problems to the author at gilbertd@cs.man.ac.uk        */
 /****************************************************************************/
-/* Support file for 6522 via - 30/10/94 - David Alan Gilbert */
+/* Sound emulation for the beeb - David Alan Gilbert 26/11/94 */
 
-#ifndef VIA_HEADER
-#define VIA_HEADER
+#ifndef SOUND_HEADER
+#define SOUND_HEADER
 
-typedef struct {
-  unsigned char ora,orb;
-  unsigned char ira,irb;
-  unsigned char ddra,ddrb;
-  unsigned char acr,pcr;
-  unsigned char ifr,ier;
-  int timer1c,timer2c; /* NOTE: Timers descrement at 2MHz and values are */
-  int timer1l,timer2l; /*   fixed up on read/write - latches hold 1MHz values*/
-  int timer1hasshot; /* True if we have already caused an interrupt for one shot mode */
-  int timer2hasshot; /* True if we have already caused an interrupt for one shot mode */
-} VIAState;
+#ifdef WIN32
+/* Always compile sound code - it is switched on and off using SoundEnabled */
+#define SOUNDSUPPORT
+#endif
 
-void VIAReset(VIAState *ToReset);
-void SaveVIAState(VIAState *VIAData, unsigned char *StateData);
-void RestoreVIAState(VIAState *VIAData, unsigned char *StateData);
+extern int SoundEnabled;    /* Sound on/off flag */
+extern int SoundSampleRate; /* Sample rate, 11025, 22050 or 44100 Hz */
+extern int SoundVolume;     /* Volume, 1(full),2,3 or 4(low) */
 
-void via_dumpstate(VIAState *ToDump);
+extern int SoundTrigger; /* Cycle based trigger on sound */
+
+void SoundInit();
+void SoundReset();
+
+/* Called in sysvia.cc when a write to one of the 76489's registers occurs */
+void Sound_RegWrite(int Value);
+
+void SoundTrigger_Real(void);
+
+#define Sound_Trigger(ncycles) if (SoundTrigger<=TotalCycles) SoundTrigger_Real();
+
 #endif

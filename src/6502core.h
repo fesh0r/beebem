@@ -36,6 +36,8 @@ typedef enum {
     nmi_econet,
 } NMI_Nums;
 
+extern int IgnoreIllegalInstructions;
+
 extern unsigned char intStatus;
 extern unsigned char NMIStatus;
 extern unsigned int Cycles;
@@ -54,6 +56,9 @@ void Init6502core(void);
 /*-------------------------------------------------------------------------*/
 /* Execute one 6502 instruction, move program counter on                   */
 void Exec6502Instruction(void);
+
+void Save6502State(unsigned char *CPUState);
+void Restore6502State(unsigned char *CPUState);
 
 void core_dumpstate(void);
 #endif

@@ -1,7 +1,6 @@
-
 /****************************************************************************/
-/*              Beebem - (c) David Alan Gilbert 1994                        */
-/*              ------------------------------------                        */
+/*                               Beebem                                     */
+/*                               ------                                     */
 /* This program may be distributed freely within the following restrictions:*/
 /*                                                                          */
 /* 1) You may not charge for this program or for any part of it.            */
@@ -17,28 +16,25 @@
 /*                                                                          */
 /* If you do not agree with any of the above then please do not use this    */
 /* program.                                                                 */
-/* Please report any problems to the author at gilbertd@cs.man.ac.uk        */
 /****************************************************************************/
-/* Support file for 6522 via - 30/10/94 - David Alan Gilbert */
+/* Analogue to digital converter support file for the beeb emulator -
+   Mike Wyatt 7/6/97 */
 
-#ifndef VIA_HEADER
-#define VIA_HEADER
+#ifndef ATODCONV_HEADER
+#define ATODCONV_HEADER
 
-typedef struct {
-  unsigned char ora,orb;
-  unsigned char ira,irb;
-  unsigned char ddra,ddrb;
-  unsigned char acr,pcr;
-  unsigned char ifr,ier;
-  int timer1c,timer2c; /* NOTE: Timers descrement at 2MHz and values are */
-  int timer1l,timer2l; /*   fixed up on read/write - latches hold 1MHz values*/
-  int timer1hasshot; /* True if we have already caused an interrupt for one shot mode */
-  int timer2hasshot; /* True if we have already caused an interrupt for one shot mode */
-} VIAState;
+extern int JoystickEnabled;
+extern int JoystickX;  /* 16 bit number, 0 = right */
+extern int JoystickY;  /* 16 bit number, 0 = down */
 
-void VIAReset(VIAState *ToReset);
-void SaveVIAState(VIAState *VIAData, unsigned char *StateData);
-void RestoreVIAState(VIAState *VIAData, unsigned char *StateData);
+void AtoDWrite(int Address, int Value);
+int AtoDRead(int Address);
+void AtoDInit(void);
+void AtoDReset(void);
 
-void via_dumpstate(VIAState *ToDump);
+extern int AtoDTrigger;  /* For next A to D conversion completion */
+
+void AtoD_poll_real(void);
+#define AtoD_poll(ncycles) if (AtoDTrigger<=TotalCycles) AtoD_poll_real();
+
 #endif
