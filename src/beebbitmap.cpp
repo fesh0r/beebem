@@ -18,12 +18,12 @@ BeebBitmap::BeebBitmap()
 {
     m_lpbmi = (BITMAPINFO *)&m_bmi;
     m_bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-    m_bmi.bmiHeader.biWidth = 640;
+    m_bmi.bmiHeader.biWidth = 320;
     m_bmi.bmiHeader.biHeight = -256;
     m_bmi.bmiHeader.biPlanes = 1;
     m_bmi.bmiHeader.biBitCount = 8;
     m_bmi.bmiHeader.biCompression = BI_RGB;
-    m_bmi.bmiHeader.biSizeImage = 640*256;
+    m_bmi.bmiHeader.biSizeImage = 320*256;
     m_bmi.bmiHeader.biClrUsed = 0;
     m_bmi.bmiHeader.biClrImportant = 0;
 
@@ -85,5 +85,5 @@ void BeebBitmap::Blit(HDC hDestDC, int srcy, int size)
 {
     SelectObject(m_hDCBitmap, m_hBitmap);
 
-    WinGBitBlt(hDestDC, 0, srcy, 640, size, m_hDCBitmap, 0, srcy);
+    WinGBitBlt(hDestDC, 0, srcy, 320, size, m_hDCBitmap, 0, srcy);
 }
