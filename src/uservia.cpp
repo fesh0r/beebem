@@ -27,6 +27,7 @@
 #include "6502core.h"
 #include "uservia.h"
 #include "via.h"
+#include "viastate.h"
 
 #ifdef WIN32
 #include <windows.h>
@@ -313,7 +314,8 @@ void UserVIA_poll_real(void) {
   if (UserVIAState.timer2c<0) {
     tCycles=abs(UserVIAState.timer2c);
     /* cerr << "UserVIA timer2c\n"; */
-    UserVIAState.timer2c=(UserVIAState.timer2l * 2)-(tCycles-4);
+    UserVIAState.timer2c=(UserVIAState.timer2l * 2)+(tCycles-(3+UserVIAState.timer2adjust));
+    UserVIAState.timer2adjust=1-UserVIAState.timer2adjust;
     if (!(UserVIAState.ifr&=0x20)) {
      /* cerr << "UserVIA timer2c - int\n"; */
       UserVIAState.ifr|=0x20; /* Timer 2 interrupt */
