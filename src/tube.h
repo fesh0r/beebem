@@ -19,52 +19,39 @@
 /* Please report any problems to the author at beebem@treblig.org           */
 /****************************************************************************/
 /* 6502Core - header - David Alan Gilbert 16/10/94 */
-#ifndef CORE6502_HEADER
-#define CORE6502_HEADER
+/* Copied for 65C02 Tube by Richard Gellman 13/04/01 */
+#ifndef TUBE6502_HEADER
+#define TUBE6502_HEADER
 
 #include "port.h"
 
-void DumpRegs(void);
+extern unsigned char EnableTube,TubeEnabled;
+// EnableTube - Should the tube be enabled on next start - 1=yes
+// TubeEnabled - Is the tube enabled by default - 1=yes
 
 typedef enum {
-  sysVia,
-  userVia,
-  serial,
-  tube,
-} IRQ_Nums;
+    R1,
+    R2,
+    R4,
+} TubeIRQ;
 
 typedef enum {
-    nmi_floppy,
-    nmi_econet,
-} NMI_Nums;
+    R3,
+} TubeNMI;
 
-extern int IgnoreIllegalInstructions;
-extern int BeginDump;
-
-extern unsigned char intStatus;
-extern unsigned char NMIStatus;
-extern unsigned int Cycles;
-extern int ProgramCounter;
-extern CycleCountT TotalCycles;
-
-#define SetTrigger(after,var) var=TotalCycles+after;
-#define IncTrigger(after,var) var+=(after);
-
-#define ClearTrigger(var) var=CycleCountTMax;
-
-#define AdjustTrigger(var) if (var!=CycleCountTMax) var-=CycleCountWrap;
 
 /*-------------------------------------------------------------------------*/
 /* Initialise 6502core                                                     */
-void Init6502core(void);
+void Init65C02core(void);
 
 /*-------------------------------------------------------------------------*/
 /* Execute one 6502 instruction, move program counter on                   */
-void Exec6502Instruction(void);
+void Exec65C02Instruction(void);
 
-void Save6502State(unsigned char *CPUState);
-void Restore6502State(unsigned char *CPUState);
-void DoNMI(void);
-void core_dumpstate(void);
-void DoInterrupt(void);
+void DoTubeNMI(void);
+void DoTubeInterrupt(void);
+void SyncTubeProcessor(void);
+unsigned char ReadTubeFromHostSide(unsigned char IOAddr);
+void WriteTubeFromHostSide(unsigned char IOAddr,unsigned char IOData);
+extern int TubeProgramCounter;
 #endif

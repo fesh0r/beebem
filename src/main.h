@@ -21,6 +21,10 @@
 
 #ifndef MAIN_HEADER
 #define MAIN_HEADER
+#ifdef MULTITHREAD
+#undef MULTITHREAD
+#endif
+//#define MULTITHREAD
 
 #include <windows.h>
 #include "beebwin.h"
@@ -28,5 +32,6 @@
 extern unsigned char MachineType;
 extern BeebWin *mainWin;
 extern HINSTANCE hInst;
+extern HANDLE hRunMutex;
 
 #endif
