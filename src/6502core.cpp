@@ -1304,16 +1304,6 @@ void Exec6502Instruction(void) {
   if ((intStatus) && (!GETIFLAG)) DoInterrupt();
 
   TotalCycles+=Cycles;
-  if (TotalCycles > CycleCountWrap)
-  {
-    TotalCycles -= CycleCountWrap;
-    AdjustTrigger(AtoDTrigger);
-    AdjustTrigger(SoundTrigger);
-    AdjustTrigger(Disc8271Trigger);
-    AdjustTrigger(AMXTrigger);
-    AdjustTrigger(PrinterTrigger);
-    AdjustTrigger(VideoTriggerCount);
-  }
 
   VideoPoll(Cycles);
   SysVIA_poll(Cycles);
