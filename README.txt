@@ -1,389 +1,713 @@
-Readme.1st for V1.0 of Beebem (see 'changes' file for history)
+BeebEm for Microsoft Windows
+============================
 
-/****************************************************************************/
-/*              Beebem - (c) David Alan Gilbert 1994/1995                   */
-/*              -----------------------------------------                   */
-/* This program may be distributed freely within the following restrictions:*/
-/*                                                                          */
-/* 1) You may not charge for this program or for any part of it.            */
-/* 2) This copyright message must be distributed with all copies.           */
-/* 3) This program must be distributed COMPLETE,with source code.  Binary   */
-/*    only distribution is not permitted.                                   */
-/* 4) The author offers no warranties, or guarantees etc. - you use it at   */
-/*    your own risk.  If it messes something up or destroys your computer   */
-/*    thats YOUR problem.                                                   */
-/* 5) You may use small sections of code from this program in your own      */
-/*    applications - but you must acknowledge its use.  If you plan to use  */
-/*    large sections then please ask the author.                            */
-/*                                                                          */
-/* If you do not agree with any of the above then please do not use this    */
-/* program.                                                                 */
-/* Please report any problems to the author at beebem@treblig.org           */
-/****************************************************************************/
+BeebEm is a BBC Micro and Master 128 emulator.  It enables you to run BBC
+Micro software on your PC.  BeebEm should work on most PC systems running
+Windows 98 or later.
 
-This directory contains 'Beebem' a program which attempts to emulate
-the behavior of the British Broadcasting Corporation Model B computer system
-produced in the early 1980's by Acorn Computers Ltd of Cambridge, England.
-It should be noted at this stage that the author has no connection with
-either the BBC or Acorn and this product has not been approved or
-sanctioned by either of them.  The author recognizes all trademarks etc.
-I don't want to tread on anyones toes - if there is something else I should
-say then tell me - I'll add it.
+BeebEm is distributed with everything you need to get going, just run BeebEm
+from the Start menu (or run BeebEm.exe if you unzipped it).  If BeebEm does
+not run see the troubleshooting section below.
 
-The copyright on everything in Beebem is held by the author, David Alan Gilbert.
+BeebEm is distributed with source code in the Src.zip file so you can
+compile and modify BeebEm yourself.
 
-<OK thats the formal stuff out of the way.....>
+The copyright on everything in BeebEm resides with David Gilbert, the
+original author, as described in COPYRIGHT.txt.
 
-MICROSOFT WINDOWS
+
+Running BBC Micro Software
+--------------------------
+
+BeebEm runs BBC Micro software held in disc or tape image files kept on your
+PC's hard disc.  Some disc images are supplied with BeebEm, in the 'DiscIms'
+directory.  To run a disc image use the 'Run Disc' option on the File menu.
+
+You can download more disc images from internet sites such as these:
+
+  http://www.stairwaytohell.com/
+  http://www.rubybay.com/users/drbeeb/
+  http://www.users.waitrose.com/~sharx/beeb.htm
+  http://www.nvg.ntnu.no/bbc/
+  http://www.iancgbell.clara.net/elite/
+
+Put the disc image files into the DiscIms directory where BeebEm was
+installed or unzipped.  The default location is:
+
+  C:\Program Files\BeebEm
+
+
+Configuring BeebEm
+------------------
+
+To get BeebEm running at an optimal speed there are some configuration
+options that can be changed.  BeebEm will display the speed of emulation
+relative to a real BBC Micro and the number of frames per second (fps) being
+displayed.  You should see these values in the window title bar or at the
+bottom of the screen in full screen mode.
+
+You will usually get best performance (and best looking screen) by enabling
+the following options on the View menu:
+
+* DirectDraw ON
+* Buffer in Video RAM ON
+
+You may also find that the best fps rate is achieved in full screen mode by
+selecting:
+
+* 32-bit DirectDraw ON
+* Full screen ON
+
+Choosing a high resolution DirectDraw Full Screen Mode will improve the look
+of the screen.
+
+If you have a fast PC you can also improve the sound quality by selecting
+the 44.1kHz sample rate on the Sound menu.
+
+For further information on speeding up BeebEm see the notes for the
+'Hardware' menu below.
+
+Once you have decided on a set up you can save it using 'Options - Save
+Preferences'.
+
+
+ROM Software
+------------
+
+Although most games software is supplied on disc images there is a large
+selection of ROM software available for the BBC Micro.  There are
+application ROMs such as word processors and drawing packages, there are
+programing language ROMs such as FORTH and BCPL, and a whole range of other
+software.  The BBC Micro's operating system, BASIC language and disc filing
+system are all supplied on ROM.
+
+The BBC Micro and Master 128 (and BeebEm) support up to 16 ROM slots (plus
+one for the operating system).  The BBC Micro ROMs are kept in
+subdirectories of the 'BeebFile' directory.  The is one subdirectory for
+each of the four models emulated.
+
+The ROMs that BeebEm loads are configured in the 'Roms.cfg' file.  You can
+edit this file using Notepad to add a ROM.  Change one of the 'EMPTY' lines
+to the name of the ROM file you have put one of the BeebFile directories.
+The first 17 lines in Roms.cfg are for the BBC Micro Model B emulation, the
+second 17 are for the IntegraB emulation, the third for the B Plus emulation
+and the last 17 for the Master 128 emulation.
+
+To run a ROM you will need to type a command into BeebEm.  The exact command
+will depend on the ROM itself and you may need to refer to any documentation
+that accompanied the ROM.  Some ROMs list the commands available when you
+type '*HELP' into BeebEm.
+
+Any of the 16 ROM slots can be configured as RAM.  Some software
+(e.g. games) can make use of this RAM so its a good idea to leave at least
+one slot as RAM.
+
+Note that certain ROMs must be present for each emulation mode to work so do
+not remove these:
+
+ BBC Model B          - OS12.ROM, BASIC2.ROM, WDFS.ROM
+ BBC Model B IntegraB - OS12.ROM, IBOS.ROM, BASIC2.ROM, WDFS.ROM
+ BBC Model B Plus     - B+MOS.ROM, BASIC2.ROM, WDFS.ROM
+ Master 128           - MOS.ROM, TERMINAL.ROM, BASIC4.ROM, DFS.ROM
+
+
+Keyboard Mappings
 -----------------
 
-Beebem has been ported to Microsoft Windows.  For details of the Windows
-version see the ReadMe.Win file.  Most of this readme refers to the X
-version for UNIX systems.
+There are two main keyboard mappings available on the Options menu, default
+mapping and logical mapping.
 
-0) PLEASE
----------
-Send me suggestions for improvments - both in the emulator and the way I have
-coded it.  I'm fairly new to C++ and X (although I have a lot of C experience)
-so any lessons on what I am doing wrong are welcome.
-If you find a bug, don't just curse at it - tell me about it and I may be able
-to fix it.
+For default mapping most of the keys are the same on the Beeb and PC but
+these are not:
 
-Dave Gilbert - beebem@treblig.org
+   PC               Beeb
 
-1) This program is designed to run under the X windows system on Unix
-workstations.  It has been tested on a Linux PC,Sun and HP workstations.
+   F10 & F11        f0
+   F1-F9            f1-f9
+   F12              Break
+   -_               -=
+   =+               ^~
+   `                @
+   #~               _
+   ;:               ;+
+   '@               :*
+   End              Copy
 
-2) You need an 8 bit deep display on a server which supports the MIT
-shared memory extensions - I've not made any provision for use without shared
-memory - this also means that you have to run the program on the workstation
-that the display is on.
+With logical mapping the key symbols are mapped directly (for a UK PC
+keyboard at least) so you get what you press.  Note that logical mapping
+sometimes has to change the shift key state in order to work so it can do
+some unexpected things if you use it while playing a game that uses shift.
+Its probably better to use default mapping when playing games.
 
-3) The program requires a C++ compiler which supports templates.  I haven't
-made much use of this yet.  I have used gcc 2.58,2.6.3 and 2.7.0 - I strongly
-recommend 2.6.3 over 2.5.8 since 2.5.8 has a nasty habit of missing some
-errors. It actually needs to be able to handle nested templates - I think the
-Silicon Graphics compilers have problems with that.
+If you do not use a UK keyboard then you may want to set up your own
+mapping.  Use the 'user keyboard' mapping options in BeebEm to do this and
+remember to save it using the 'save preferences' option.
 
-4) It also requires the C++ iostream libraries.  The names of these vary from
-OS to OS and compiler version etc.  The Linux config file now uses -lstdc++
-which gcc 2.7.0 seems to use (or is it the latest Linux libraries???) - if
-you have earlier versions you will need to change this to -liostream .
+The keypad +/- keys will change between the BeebEm fixed speeds.
 
-5) You will need images of the Beeb D(N)FS, OS 1.2 and BASIC and disc images
-of programs you wish to run under the beeb - more details below.
 
-Installation
-------------
-You've presumably unpacked this tar - good!
+Using Disc Images
+-----------------
 
-Next thing is to construct a makefile (or three!).  First have a look
-if there is a 'config.' file for your machine - e.g. config.linux.  If not
-create one based on one of them.  Edit the file until it matches your
-environment (includes etc.).
+BeebEm emulates two double sided floppy disc drives, know as drives 0 and 1
+(the second sides are drive 2 and 3).  You can load a disc image file into
+either drive 0 or 1 using the File menu in BeebEm.
 
-Now type 'configure machinename' (e.g. configure linux) - that
-will build all the makefiles.  Now edit port.h - if your
-using gcc you probably don't need to do anything.
-Finally you may have to change the keyboard map.
-There is a line in beebwin.cc:
+Some useful disc commands are:
 
-#include "keytable_2"
+  *CAT              - List files on the disc
+  *DRIVE <drive>    - Change default drive to number <drive>
+  *TITLE <title>    - Put a title on the disc
+  *DELETE <file>    - Delete a file
+  LOAD "<file>"     - Load a BASIC program
+  CHAIN "<file>"    - Load and run a BASIC program
+  SAVE "<file>"     - Save a BASIC program
+  *RUN <file>       - Load and run a binary program
 
-Thats a keyboard table which suits PC style keyboards (and Sun 4, and some
-Sun 5) - you can change that to point at another keytable file.  If you
-want to create your own see the description below.
+To boot (i.e. run) a disc you press Shift & F12 (hold the shift key down and
+press F12).  If a disc does not boot it is probably because it has not been
+set up to be bootable.
 
-If you want sound you need to add -DSOUNDSUPPORT onto the CFLAGS in the top
-level makefile.  Sound has only been tested (and probably will only work) on
-Linux.  You need a lot of processing speed for it (but see the
-BeebVideoRefreshFreq environment variable below).
+A bootable disc needs to have a file called !BOOT on it and it needs to be
+configured to run the !BOOT file when its booted.  If a disc image has a
+!BOOT file on it but it does not boot then try running the following command
+(you will need to switch off write protection first):
 
-Now type 'make' - and hope for the best! When it doesn't work look at the
-bottom of this file for some hints.
+  *OPT4,3
 
-Now you have to get three disc images from a beeb.  One of an 8271 dfs (I
-used DNFS).  Place that in beebfile/dnfs (even if its a dfs).  Put the basic
-rom in beebfile/basic and the OS in beebfile/os12.  These images are just 16KB
-binary files. I CAN'T SEND YOU COPIES OF THESE FILES!!!!
+If you want to write data to a disc image (e.g. save a game position) you
+will need to make sure that 'Write Protect' is switched off on the File menu
+for the drive you are using.  Disc writes will then write data straight back
+to the image file on your PC disc.
 
-If you are planning on reading a disc (a good idea!) you'll have to figure out
-how to make a disc image.  The present disc images are simple sector images -
-the format of which is described below.  I produced these using an
-Acorn Archimedes with a 5.25" drive - I suspect you can do the same with a PC
-with a suitable drive (which I do not have).
+If you want to use ADFS discs in the Master 128 mode then load the ADFS disk
+image and type '*ADFS' to mount it.  You can also press A & F12 to mount an
+ADFS disc.
 
-If you can't generate a disc image then you can use the test one supplied
-in the discims directory.
+You can find out more information about using discs by reading the DFS (Disc
+Filing System) guides available on the internet.
 
-By default 'beebem' looks in discims/test.ssd for the discimage (which is an
-80 track single sided image).  An environment variable can be used to change
-this - see below.
-
-OK - now type 'beebem'.  It should come up in mode 7 with the standard beeb
-start up messages.
-
-Use:
-----
-The only thing you really have to get used to is the keyboard mapping which
-isn't quite right yet.  Break is mapped to F12 and Break and Pause.  One of
-those should work for you.  If not try L2 on a sun.  On my Linux box shift or
-Ctrl F12 doesn't work but Shift+F2 seems to do the trick - I don't understand
-why. F0 is mapped to F10.  On HP's the four unmarked keys above the keypad
-correspond to F9-F12.
-
-The rest of the keyboard is also a bit strange.  Each key on the keyboard
-corresponds directly to a key on the beeb's keyboard - that is one key will
-have the effect of the beeb's ;+ key even though the workstations keyboard
-doesn't have it.   The mapping is defined in the 'keymaps_2' file which works
-well for PC, Sun 4 and some Sun 5 keyboards, details of how to change it are
-described below.
-
-BUT! z,x and / are the same and the default map uses the key with the ' on the
-bottom for the beebs :* key - that should let you play most games!
-
-Environment variables
----------------------
-1) BeebDiscLoad0 and BeebDiscLoad1
-
-Default value for BeebDiscLoad0 is "S:80:discims/test.ssd".
-
-These variables allow you to load disc images into drives 0 and 1.
-Values should take the form "D|S:tracks:filename", D for double sided image
-and S for single sided.
-
-E.g. doing the following in SH loads a (D)ouble sided, 80 track disc image
-     called 'discims/games' into drive 0.
-
-BeebDiscLoad0="D:80:discims/games"
-export BeebDiscLoad0
-
-The format of the disc image files is described below.
-
-2) BeebVideoRefreshFreq (default 1)
-
-This is a speed hack.  If set to 'n' then only every n'th field is rendered
-and thus the emulation is faster (but not 'n' times!!).
-
-If you have enabled the sound support but all you get is noise when you run
-BeebEm then try setting BeebVideoRefreshFreq to a larger value.  Keep
-increasing the value until sound generation works.  On a Pentium 100 try
-values between 5 and 8.  On a P200 it should run with a value of 1 (it will
-depend on your graphics card speed however).
-
-2) BeebDiscWrites
-
-Defining this variable will enable disc writes for both drives.  Any changes
-you make to the files in the disc will automatically get written back to the
-image file.
-
-WARNING - most disc images you will find on the internet or that you have
-created yourself will have an invalid catalogue (they contain just enough
+WARNING - some of the disc images you will find on the Internet or that you
+create yourself will have an invalid catalogue (they contain just enough
 information for disc reads to work but not writes).
 
-When beebem starts up with disc writes enabled it checks the disc catalogues
-and it will display a warning message if either are invalid.  If you see a
-warning message then do NOT write to the disc image, you will loose data.
+When you write enable a disc BeebEm checks the disc catalogues and it will
+display a warning message if either are invalid.  If you get a warning
+message then do NOT write to the disc image, you will loose data.
 
 To fix an invalid catalogue do the following:
 
-  1. Create a new disc image file,
-       e.g. touch discims/newdisc.ssd
+1. Start BeebEm and load the invalid image into drive 1.
 
-  2. Load the old and new images into BeebEm with writes enabled,
-       e.g. BeebDiscLoad0="S:80:discims/newdisc.ssd"
-            BeebDiscLoad1="S:80:discims/olddisc.ssd"
-            BeebDiscWrites=1
-            export BeebDiscLoad0 BeebDiscLoad1 BeebDiscWrites
-            beebem
+2. Create a new disc image file in drive 0.
 
-  3. Format the new disc image - you will need a DFS with a format command
-     to do this (such as the Watford DFS),
-       e.g. *ENABLE
-            *FORM80 0     (make sure you use the correct drive!)
+3. If the invalid image uses a Watford DFS 62 file catalogue then
+   format the new disc image with a 62 file catalogue (you need the
+   Watford DFS ROM installed), type:
+     *ENABLE
+     *FORM80 0
 
-  4. Copy all the files from the old disc to the new one and set the shift
-     break option and title,
-       e.g. *COPY 1 0 *.*
-            *OPT4,3
-            *TITLE Games
+4. Copy all the files from the invalid disc to the new one and set the
+   shift break option and title, type:
+     *COPY 1 0 *.*
+     *OPT4,3
+     *TITLE <title>
 
 The new image will now have a valid catalogue.  If you are using double
-sided images then remember to format and copy both sides.
+sided images then remember to format and copy both sides (the second sides
+of disc 0 and 1 are 2 and 3).
 
 
-Disc image formats
-------------------
+IDE Disk Support
+----------------
 
-Two forms of disc image are presently supported.  The first is single sided
-format.  This consists of a raw disc image of a beeb, 10 sector per track, 256
-byte per sector disc side.  So the image is ordered
-  track 0,sector 0,
-  track 0,sector 1,
-         .
-  track 0,sector 9,
-  track 1,sector 0
+Jon Welch has added some preliminary support for emulated IDE hard disks to
+BeebEm.  There are 4 blank IDE drive images, pre-formatted to 4MB each, in
+the discims directory.  To use the images you need to change the ADFS ROM
+used in Master 128 mode to a modified version (produced by Jonathan
+Harston).  Change "ADFS.rom" in the Roms.cfg file to "ADFS1-53.rom".
 
-  etc.
+After selecting Master 128 emulation, press A & F12 to boot in ADFS mode and
+type:
+     *MOUNT 0
 
-The double sided format uses interleaved tracks:
-  track 0,head 0, sector 0,
-            .
-  track 0,head 0, sector 9,
-  track 0,head 1, sector 0,
-            .
-  track 0,head 1, sector 9,
-  track 1,head 0, sector 0,
-            etc
+This will mount the IDE disks.  The hard disks can then be used as drives 0
+to 3.  Floppy disks can still be accessed as drives 4 to 7.
 
-This double sided format can be produced using the !Zap editor on the Acorn
-Archimedes with a 5 1/4" drive.  The author intends to write a utility for
-Linux to do the same thing.
+For more infomation on the patched ADFS ROM see:
+     http://www.mdfsnet.f9.co.uk/Info/Comp/BBC/IDE/ADFS/
 
-Keymaps
--------
-Mapping the beeb keyboard to that of a workstation is a nightmare.  Due to the
-way in which the beeb keyboard handles shifts, it is difficult to reliably map
-the symbols printed on the workstation keys to the beeb.  For this reason what
-'beebem' does is to map one workstation key exactly onto a beeb key.  For
-example on the standard keymap the '6^' key on my PC or workstation actually
-produces 6& just like the beeb.
+Jon Welch has written a tool for building IDE drive images, its called HADFS
+Explorer and can be downloaded from Jon's web page:
+     http://www.g7jjf.com
 
-You may have to modify the keytable (keytable_2) if you have a wierd keyboard.
-It consists of a table of X keysyms and the corresponding row/column positions
-on the beebs key matrix.  The keysyms in this file should be the first keysym
-associated with akey - i.e. what you get without any modifiers (shifts/control
-etc.) - so only XK_t is used NOT Xk_T.
 
-Please remember the terminator on the end of the list.
+Using Tape Images
+-----------------
 
-One problem is that lock keys, like the Caps Lock key get locked before the
-emulator gets to them, so to release a capslock on the beeb you have to press
-it twice.  I've got some ideas for how to cure this, but in the mean time if
-you have a game which uses capslock (e.g. positron) you could always use the
-keytable file to map it to a different key.
+BeebEm emulates a cassette recorder.  You can load a tape image file using
+the File menu in BeebEm.
 
-If you have good working keytables I'd be happy to include them in the
-distribution.
+Some useful tape commands are:
 
-Emulation Limitations
----------------------
-1) Hold and Release graphics in Mode 7
+  *TAPE             - Select tape filing system
+  *CAT              - List files on the tape
+  LOAD ""           - Load a BASIC program
+  CHAIN ""          - Load and run a BASIC program
+  SAVE "<file>"     - Save a BASIC program
+  *RUN              - Load and run a binary program
 
-These two command codes aren't emulated in Mode 7- if someone can explain to
-me what they are supposed to do, I'll add them, but so far I've completely
-failed to find a decent explanation!
+Most tapes can be run by typing:
 
-2) Incomplete 8271 emulation
+  *TAPE
+  CH.""
 
-A subset of the 8271 is supported.  Enough to allow disc reads, writes and
-formatting of 'normal' BBC format discs, i.e. 40 or 80 track, single or
-double sided, 256 byte sectors, 10 sectors per track.
+if that does not work, rewind the tape and try:
 
-3) Elite - sticky explosions (bug)
+  *TAPE
+  *RUN
 
-The explosions don't go away in Elite - I suspect I know why.
+Tape loading can be quite slow so BeebEm has menu options to artificially
+speed up loading.  You can also use the speed menu (or keypad +/-) to speed
+up the whole emulation, which speeds up tape loading.
 
-4) Revs - screen display corrupted (bug)
+BeebEm has a Tape Control window that enables you to move the tape position
+around by clicking on the block you want to load next.  If a block is missed
+when loading from a tape you will need to move the tape position back to
+retry the block.
 
-Revs relies on precise timing information and is difficult to emulate without
-hacking.  I intend to cure this in later releases.
+If you want to save files to a tape image then you can use the 'Record'
+button on the Tape Control.  If you have a tape loaded then pressing Record
+will append saved files to the end of the tape image.  If you want to create
+a new tape image then eject the current tape and press Record.  The tape
+block list will be updated when recording finishes (press Stop when the save
+completes).
 
-5) Undefined opcodes
 
-Many of the undocumented 6502 instructions have been implemented in V0.7 so
-games such as Zalaga and Dare Devel Denis now work.  There are quite a few
-opcodes that are still not implemented though.  The emulator treats all of
-these instructions as NOPs.
-
-6) Timing
-
-The timing of instructions is not precise - well most are but the special
-cases (i.e. if you skip over a page boundary it takes one more cycle) are not
-accounted for.
-
-7) Missing hardware
-
-Serial, ADC, Printer port, keyboard LEDs, tube, light pen, and
-econet are not yet emulated.  Econet holds a lot of possiblities - I
-quite like the idea of doing a socket based daemon type thing.
-
-8) Hangs after reset
-
-Sometimes if you've played a game and hit reset the emulated beeb hangs - I
-think thats due to not resetting VIAs correctly.
-
-9) Junk at bottom/side of screen
-
-In mode 7 you sometimes get a bit of junk at the bottom of the screen.  This
-also happens in screen modes which only use part of the display area.
-
-10) Crashes if you resize window on X
-
-Yeh - I know; I must fix that....
-
-Problems
---------
-1) olvwm
-On suns olvwm never passes any input to beebem.
-On the olvwm I have with Linux, beebem never gets focus in and out events
-which it needs to handle auto repeat properly.
-The solution in both cases is to use a different window manager - such as
-Fvwm.
-
-2) Can't find stdc++ during link
-Change the '-lstdc++' to '-liostream'; this depends on the compiler version.
-
-3) Lockups
-It hasn't done it for a while - but I had it happen on an older version of the
-X server under Linux - if it happens to you try hitting a key.  If you've got
-Linux try and get the latest version of the server and see if that helps.
-
-4) Errors
-
-The emulator doesn't handle X, memory or file missing problems nicely - it
-normally just core's.
-
-Other things
+Menu Options
 ------------
-1) Other signals
-Sending a SIGUSR1 causes beebem to dump the register state after each
-instruction.
-Sending a SIGUSR2 causes beebem to dump the state of all IO registers once.
 
-2) Adding ROMS
-In beebmem.cc in the routine BeebMemInit there are a number of lines of the
-form :
+File Menu:
 
-ReadRom("basic",0xf);
+  Run Disc     - Loads a disc image into drive 0 and boots (runs) it.
 
-You can add extra lines to read into other rom banks.
+  Load Disc 0  - Load a disc image into drive 0 or 1.  Discs are write
+  Load Disc 1    protected when loaded to prevent any accidental data loss.
+                 Boot a disc by pressing Shift & F12.
 
-Todo
-----
+  Load Tape    - Load a tape image.  To load software off a tape type:
+                   *TAPE
+                   PAGE=&E00
+                   CH.""
 
-1) Fix bugs
-2) Add extra hardware support
-3) Speed it up!!!! (although it works fine on my Pentium-90 or an HP9000/700!)
-4) Snazzy X windows thing for setting options, key maps, selecting disc images
-and roms.
-5) Make it portable - its portable on the basis that it will probably work
-under GCC on any platform - that really isn't as portable as it should be.
+  New Disc 0   - Creates a new disc image in drive 0 or 1.  Use the file
+  New Disc 1     type field to select the type of disc image to create.
+                 New disc images are write enabled when created.  The images
+                 have a standard 31 file catalogue by default.  If you want
+                 a 62 file catalogue (Watford DFS) then format the disc.
 
-Thanks
-------
+  Write Protect 0 - Toggles write protection for drive 0 or 1.  Keep discs
+  Write Protect 1   write protected unless you intend to write to them.
+                    Also see the WARNING above in the 'Using Disc Images'
+                    section.
 
-Thanks to the members of the Beeb emulator mailing list for giving me the mad
-idea of writing this thing and suggesting fixes for some problems.  Thanks for
-various friends and members of the department for trying the program (at very
-early and touchy stages!) and lending me discs to try on it!
+  Reset        - "Power-On" reset for when a game crashes.
 
-PLEASE
-------
-Send me suggestions for improvments - both in the emulator and the way I have
-coded it.  I'm fairly new to C++ and X (although I have a lot of C experience)
-so any lessons on what I am doing wrong are welcome.
-If you find a bug, don't just curse at it - tell me about it and I may be able
-to fix it.
+  Load State   - Load or save the state of BeebEm.  This is useful for
+  Save State     saving your position in a game for example.  Note that ROM
+                 data is not saved so if you have changed the ROMs that are
+                 loaded when BeebEm starts (in Roms.cfg) then a restored
+                 state may not work.  State files are put in the 'BeebState'
+                 directory by default.
 
-Dave Gilbert - beebem@treblig.org
+  Quick Load   - Quickly load or save BeebEm state without having to
+  Quick Save     specify the filename.  The state is saved and loaded from
+                 the 'BeebState/quicksave.uef' file.
+
+  Exit         - Exit BeebEm
+
+Comms Menu:
+
+  Tape Speed          - Select the speed at which tape software loads and
+                        saves.
+  Rewind Tape         - Reset the tape position to the start.
+  Unlock Tape         - Removed the lock flag from files as they are loaded.
+                        This enables you to *LOAD a locked file.
+  Tape Control        - Opens the tape control (see Tape section above).
+
+  Printer On/Off      - Switches printer capture on or off.  To start and
+                        stop printing within BeebEm use the VDU2 and VDU3
+                        commands or Ctrl B and Ctrl C.
+
+  Printer Destination - Select where to send the printer output.
+                        WARNING - if you direct printer output to an LPT
+                        port that is not attached to anything BeebEm may
+                        hang.
+
+  RS423 On/Off        - Switches the Beeb's serial communications port on
+                        or off.
+
+  RS423 Destination   - Select where to send the serial port data.
+
+View Menu:
+
+  DirectDraw On/Off   - Switches DirectDraw screen output on or off.
+                        DirectDraw should be faster than normal output but
+                        this is not always the case.  Choose whatever gives
+                        the best frame rate.
+
+  Buffer In Video RAM - When using DirectDraw each frame can be prepared in
+                        either video or system RAM.  This option switches
+                        between the two.  Choose whatever gives the best
+                        frame rate or look.
+
+  32-bit DirectDraw   - Switches between 8 bit and 32 bit full screen mode.
+                        A 32 bit mode may look better than 8 bit.
+
+  Speed and FPS On/Off - Show or hide the relative speed and the number of
+                         frames per second.
+
+  Full Screen         - Switch to full screen mode.
+
+  Window Sizes        - Sets the window size.  The bigger the window the
+                        slower it gets!
+
+  DirectDraw Full Screen Mode - Screen resolution to use in DD full screen
+                        mode.  The higher resolutions may look better.
+
+  Monitor Type        - Selects the type of monitor to emulate.
+
+  Hide Menu           - Hides the menu.  Makes full screen mode look just
+                        like a real Beeb!
+
+  LEDs                - The Beeb keyboard and disc (1770 only) LEDs can be
+                        shown at the bottom of the BeebEm window.
+
+  Motion Blur         - Fades out contents of previous frames rather than
+                        blanking them out.  Can improve flicker in some
+                        games.  The % intensities of the 8 frames can be
+                        edited in the following registry key:
+                        HKEY_CURRENT_USER\Software\BeebEm\
+                                                MotionBlurIntensities
+
+Speed Menu:
+
+  Real Time    - Runs BeebEm at the same speed as a real BBC Micro.
+
+  Fixed Speed  - Runs BeebEm at a fixed speed relative to a real BBC Micro.
+                 The frame rate may need to be reduced for the higher
+                 speeds.  The keypad +/- keys will change between fixed
+                 speeds.
+
+  50 FPS       - Runs BeebEm at a constant frame rate.  The slower the frame
+  25 FPS         rate the faster BeebEm runs relative to a BBC Micro.
+  10 FPS
+  5 FPS
+  1 FPS
+
+Sound Menu:
+
+  Sound On/Off   - Switch sound on or off.
+
+  Sound Chip     - Switches the sound chip on or off.  Useful when you want
+                   to hear the cassette sounds.
+
+  Sound Effects  - Switches on the sound of the cassette motor and the
+                   sound of tape software loading.
+
+  44.1 kHz       - Sets the sound sample rate.  The higher it is the better
+  22.05 kHz        the sound quality but the slower BeebEm runs.
+  11.025 kHz
+
+  Full Volume    - Set the sound volume.
+  High Volume
+  Medium Volume
+  Low Volume
+
+  Use Primary Buffer - Grabs exclusive use of your sound card so any other
+                   applications playing music will stop.  May make BeebEm
+                   run faster.
+
+  Part Samples   - Smooths sound sampling.  Using part samples usually
+                   sounds better.
+
+AMX Menu:
+
+  On/Off          - Switch AMX mouse on or off.  Note that you may find the
+                    AMX mouse easier to use if you reduce the BeebEm speed
+                    to 0.9 or 0.75 speed.  It may also be useful to hide the
+                    Windows cursor as well (see the Options menu).
+
+  L+R for Middle  - Simulates a middle button press when you press the left
+                    and right buttons together.
+
+  Map to 160x256  - Coordinate range to map the Windows mouse position to.
+  Map to 320x256    Pick the one that gives AMX mouse movements nearest to
+  Map to 640x256    your Windows mouse movements.
+
+  Adjust +50%     - Percentage to increase or decrease the AMX map sizes.
+  Adjust +30%       Pick the one that gives AMX mouse movements that are
+  Adjust +10%       slightly greater than the corresponding Windows mouse
+  Adjust -10%       movements.  You can then match up the AMX and Windows
+  Adjust -30%       pointer positions by moving the Windows pointer to the
+  Adjust -50%       edges of the BeebEm Window.  This is easiest to do in
+                    full screen mode.
+
+Hardware Menu:
+
+  BBC Model           - Allows you to switch between the BBC Model B types
+                        and Master 128 emulation.
+
+  Model B Floppy Controller - Allows you to select the Model B disc hardware
+                        emulation.  To use an alternative floppy disc
+                        controller (FDC) board you will need to use an
+                        appropriate ROM (e.g. Acorn DFS2.26 for the Acorn
+                        1770 board).
+
+  65C02 Second Processor - Enables/disables the 65C02 second processor
+                        emulation.  Note that in Master 128 mode the second
+                        processor  may be disabled in the CMOS settings.
+                        To enable it type this command and press
+                        break (F12):
+                            *CONFIGURE TUBE
+
+  Torch Z80 Second Processor - Enables/disables the Z80 second processor
+                        emulation.  See the README_Z80.TXT file for more
+                        details.
+
+  Allow ROM writes    - Enable/disable ROM writes for each ROM slot.
+                        ROMs read at start-up are write protected by
+                        default.  Some ROM software was supplied on
+                        small expansion boards that had some RAM on them.
+                        These ROMs require write access in order to work.
+
+  Ignore Illegal Instructions - When disabled a dialog appears detailing
+                                the opcode and program counter.
+
+  Undocumented Instructions - Some games use undocumented instructions so
+                        try enabling the full set if something does not
+                        work.  Selecting documented instructions only may
+                        speed BeebEm up.
+
+  Teletext Half Mode  - Uses half the number of screen lines for teletext
+                        mode 7.  May speed BeebEm up.
+
+  Basic Hardware Only - Switches off Analogue to Digital (Joystick) and
+                        Serial (printing, comms & tape) emulation.  May
+                        speed BeebEm up.
+
+  Sound Block Size    - Selects the amount of sound data that is written
+                        to the sound buffers at any one time.  The smaller
+                        block size may speed BeebEm up.
+
+Options Menu:
+
+  Joystick             - Switch on or off PC/Beeb analogue joystick support.
+                         Calibrate the joystick through the control panel.
+
+  Mousestick           - Switch on or off the mapping of Mouse position to
+                         Beeb joystick.
+
+  Freeze when inactive - When selected BeebEm will freeze when you switch
+                         to another Window.
+
+  Hide Cursor          - Show or hide the mouse cursor while it is over the
+                         BeebEm window (useful when using the Mousestick or
+                         the AMX mouse).
+
+  Define User Keyboard - Allows you to define your own keyboard mapping.
+                         Click on one of the BBC Micro keys and then press
+                         the key you want mapped to it (most will already
+                         be mapped to the correct keys).  Once you have
+                         defined the keys you want select the 'user mapping'
+                         and remember to save it using the 'Save
+                         Preferences' option.
+
+  User Defined Mapping - Selects the user defined keyboard mapping.
+
+  Default Keyboard Mapping - See the Keyboard Mappings section above.
+  Logical Keyboard Mapping
+
+  Map A,S to CAPS,CTRL - Maps the A and S keys to CAPS and CTRL keys on the
+                         Beeb keyboard. This is good for some games
+                         (e.g. Zalaga).
+
+  Map F1-F10 to f0-f9  - Selects a slightly different mapping for the
+                         function keys.
+
+  Debugger             - Opens the debugger window (see below).
+
+  Save Preferences     - Saves the BeebEm menu options so they are preserved
+                         for when you need start BeebEm.
+
+Help Menu:
+
+  View REAME           - View this file.
+
+  About BeebEm         - Show version number and date of BeebEm.
+
+
+Command Line Options
+--------------------
+
+The file name of a disc image can be passed to BeebEm on the command line
+and it will be run automatically.  The name can include the full path or it
+can just be the name of a file in the 'DiscIms' directory.
+
+If you create a shortcut to BeebEm.exe on your desktop and edit the
+properties (right click the icon) you can add a disc image name to the
+target box.  Running the shortcut will then run the disc image.
+
+
+Debugger
+--------
+
+The Debugger is a 6502 disassembler and monitoring tool.  When the debug
+window is first opened it leaves BeebEm running.  Its best to switch off the
+'Freeze when inactive' option though otherwise BeebEm will only run when you
+bring the main window to the front.
+
+Debugger controls:
+
+Break Execution - Stops BeebEm running.  If currently executing in the OS or
+                  ROM area and OS/ROM debug is not enabled then BeebEm will
+                  only stop when execution moves out of the OS/ROM.  When
+                  execution stops the current instruction is displayed.
+Restart         - Starts BeebEm running.
+Trace           - Shows accesses to the various bits of hardware.
+Break           - Breaks execution when the hardware is accessed.
+Debug Host      - Debugs the host processor.
+Debug Parasite  - Debugs the second processor.
+Debug ROM       - Debugs the ROM code (addresses 8000-BFFF).
+Debug OS        - Debugs the OS code (addresses C000-FFFF).
+Breakpoints     - Breaks execution when the address hits one of the
+                  configured breakpoints.
+Execute Command - Runs the debug command entered into the command box.
+
+Debug commands ([] = optional parameter):
+
+n [count]            - Execute the next [count] instructions.
+m[p] [start] [count] - Memory hex dump.  Use 'mp' to dump parasite memory.
+d[p] [start] [count] - Disassemble instructions.  Use 'dp' for parasite.
+b start [end]        - Set/clear break point.  Can be a single address or
+                       a range of addresses.
+sv                   - Show video registers.
+su                   - Show user via registers.
+ss                   - Show system via registers.
+st                   - Show tube registers.
+
+The disassembler shows the following information:
+
+  Address OPCodes Instruction A X Y Flags
+
+Parasite instructions are shifted right so it easier to follow both host and
+parasite when debugging tube code.
+
+
+Emulated Hardware
+-----------------
+
+The hardware emulated by BeebEm is that of a standard BBC Micro Model B, a
+Model B with IntegraB board, Model B Plus or Master 128 with a few small
+additions.  An optional 65C02 second processor is also emulated.  The
+emulation is near enough accurate to run most software.
+
+Hardware common to all the Model B types and Master 128:
+
+  74689 Sound chip with 3 tone channels and one noise channel.
+  uPD7002 Analogue to Digital Converter
+  32K RAM
+  6845 Cathode Ray Tube Controller (CRTC)
+  Acorn proprietary VIDPROC (Video Processor)
+  SAA5050 Teletext generator
+  System and User 6522 Versatile Interface Adaptors (VIAs)
+  "IC32" Addressable latch
+  Full BBC Micro keyboard
+  ROMSELect Register
+
+Model B Specific hardware:
+
+  Full 6502 Processor with all undocumented opcodes
+  Sixteen 16K Paged ROM banks, with Sideways RAM option
+  16K OS ROM
+  8271 Floppy Disc Controller
+
+Model B Plus Specific hardware:
+
+  Four 16K Sideways RAM banks
+  16K B+ MOS ROM
+  20K Video Shadow RAM
+  8K Filing System RAM
+  4K Screen Operations RAM
+
+Master 128 Specific hardware:
+
+  65C12 Processor with all undocumented opcodes filled in with
+    corresponding undocumented 6502 opcodes
+  Seven 16K Paged ROMs
+  Four 16K Sideways RAM banks
+  16K MOS ROM
+  20K Video Shadow RAM
+  8K Filing System RAM
+  4K Screen Operations RAM
+  1770 Floppy Disc controller
+  146818 Realtime Clock and CMOS RAM (50 bytes)
+  ACCess CONtrol register
+
+65C02 Second Processor:
+
+  65C12 Processor
+  64K on RAM
+  2K boot ROM
+  TUBE ULA chip
+
+For information on the IntegraB see the documentation in the 'Documents'
+directory.
+
+
+Troubleshooting
+---------------
+
+If BeebEm reports a problem with DirectX or DirectSound when starting up
+then try downloading the latest version of the DirectX software from
+Microsoft's web page:
+
+  http://www.microsoft.com/windows/directx/
+
+If BeebEm reports that it cannot find a file when its starting up then try
+re-installing BeebEm.
+
+If you have any other problems then email me and I'll try to help out:
+
+  mikebuk@dsl.pipex.com
+
+
+Uninstalling BeebEm
+-------------------
+
+If you wish to uninstall BeebEm then use the 'Add or Remove Programs' option
+in the Windows Control Panel/Settings.  Note that any files you have placed
+in the BeebEm directory yourself will not be removed.
+
+
+Authors
+-------
+
+Thanks go to the following people for contributing to BeebEm:
+
+  David Gilbert
+  Nigel Magnay
+  Robert Schmidt
+  Mike Wyatt
+  Laurie Whiffen
+  Richard Gellman
+  Ken Lowe
+  Jon Welch
+
+If there are any other features you would like to see in the Windows version
+of BeebEm then send me an email.  I cannot promise anything but I may find
+some time to add them.
+
+Mike Wyatt
+mikebuk@dsl.pipex.com
+http://www.mikebuk.dsl.pipex.com/beebem

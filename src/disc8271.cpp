@@ -29,6 +29,7 @@
 
 #include "6502core.h"
 #include "disc8271.h"
+#include "uefstate.h"
 
 #ifdef WIN32
 #include <windows.h>
@@ -1137,7 +1138,6 @@ void LoadSimpleDiscImage(char *FileName, int DriveNum,int HeadNum, int Tracks) {
   SectorType *SecPtr;
 
   FILE *infile=fopen(FileName,"rb");
-  mainWin->SetImageName(FileName,DriveNum,0);
   if (!infile) {
 #ifdef WIN32
     char errstr[200];
@@ -1148,6 +1148,8 @@ void LoadSimpleDiscImage(char *FileName, int DriveNum,int HeadNum, int Tracks) {
 #endif
     return;
   };
+
+  mainWin->SetImageName(FileName,DriveNum,0);
 
   strcpy(FileNames[DriveNum], FileName);
   NumHeads[DriveNum] = 1;
@@ -1198,8 +1200,6 @@ void LoadSimpleDSDiscImage(char *FileName, int DriveNum,int Tracks) {
   int CurrentTrack,CurrentSector,HeadNum;
   SectorType *SecPtr;
 
-    mainWin->SetImageName(FileName,DriveNum,1);
-
   if (!infile) {
 #ifdef WIN32
     char errstr[200];
@@ -1210,6 +1210,8 @@ void LoadSimpleDSDiscImage(char *FileName, int DriveNum,int Tracks) {
 #endif
     return;
   };
+
+  mainWin->SetImageName(FileName,DriveNum,1);
 
   strcpy(FileNames[DriveNum], FileName);
   NumHeads[DriveNum] = 2;
@@ -1494,29 +1496,32 @@ static void LoadStartupDisc(int DriveNum, char *DiscString) {
     switch (DoubleSided) {
       case 'd':
       case 'D':
-          if ((MachineType==1) || (!NativeFDC))
-            LoadSimpleDSDiscImage(Name,DriveNum,Tracks);
-          else
-              Load1770DiscImage(Name,DriveNum,1,mainWin->m_hMenu);
+        if ((MachineType==3) || (!NativeFDC))
+          Load1770DiscImage(Name,DriveNum,1,mainWin->m_hMenu);
+        else
+          LoadSimpleDSDiscImage(Name,DriveNum,Tracks);
         break;
 
       case 'S':
       case 's':
-          if ((MachineType==1) || (!NativeFDC))
-            LoadSimpleDiscImage(Name,DriveNum,0,Tracks);
-          else
-              Load1770DiscImage(Name,DriveNum,0,mainWin->m_hMenu);
+        if ((MachineType==3) || (!NativeFDC))
+          Load1770DiscImage(Name,DriveNum,0,mainWin->m_hMenu);
+        else
+          LoadSimpleDiscImage(Name,DriveNum,0,Tracks);
         break;
+
       case 'A':
       case 'a':
-          if ((MachineType==1) || (!NativeFDC))
-              Load1770DiscImage(Name,DriveNum,2,mainWin->m_hMenu);
-          else
-              MessageBox(GETHWND,"The 8271 FDC Cannot load the ADFS disc image specified in the BeebDiscLoad environment variable","BeebEm",MB_ICONERROR|MB_OK);
+        if ((MachineType==3) || (!NativeFDC))
+          Load1770DiscImage(Name,DriveNum,2,mainWin->m_hMenu);
+        else
+          MessageBox(GETHWND,"The 8271 FDC Cannot load the ADFS disc image specified in the BeebDiscLoad environment variable","BeebEm",MB_ICONERROR|MB_OK);
+        break;
+
       default:
 #ifdef WIN32
-        MessageBox(GETHWND,"BeebDiscLoad disc type incorrect, use S for single sided and "
-                   "D for double sided", "BBC Emulator",MB_OK|MB_ICONERROR);
+        MessageBox(GETHWND,"BeebDiscLoad disc type incorrect, use S for single sided, "
+                   "D for double sided and A for ADFS", "BBC Emulator",MB_OK|MB_ICONERROR);
 #else
         cerr << "BeebDiscLoad environment variable set wrong - the\n";
         cerr << "first character is either S or D signifying\n";
@@ -1529,7 +1534,7 @@ static void LoadStartupDisc(int DriveNum, char *DiscString) {
 
 /*--------------------------------------------------------------------------*/
 void Disc8271_reset(void) {
-  static onetime_initdisc=0;
+  static int onetime_initdisc=0;
   char *DiscString;
 
   ResultReg=0;
@@ -1575,6 +1580,157 @@ void Disc8271_reset(void) {
   }; /* One time discload */
 
 }; /* Disc8271_reset */
+
+/*--------------------------------------------------------------------------*/
+
+void Save8271UEF(FILE *SUEF)
+{
+    char blank[256];
+    memset(blank,0,256);
+
+    fput16(0x046E,SUEF);
+    fput32(613,SUEF);
+
+    if (DiscStore[0][0][0].Sectors == NULL) {
+        // No disc in drive 0
+        fwrite(blank,1,256,SUEF);
+    }
+    else {
+        fwrite(FileNames[0],1,256,SUEF);
+    }
+    if (DiscStore[1][0][0].Sectors == NULL) {
+        // No disc in drive 1
+        fwrite(blank,1,256,SUEF);
+    }
+    else {
+        fwrite(FileNames[1],1,256,SUEF);
+    }
+
+    if (Disc8271Trigger == CycleCountTMax)
+        fput32(Disc8271Trigger,SUEF);
+    else
+        fput32(Disc8271Trigger - TotalCycles,SUEF);
+    fputc(ResultReg,SUEF);
+    fputc(StatusReg,SUEF);
+    fputc(DataReg,SUEF);
+    fputc(Internal_Scan_SectorNum,SUEF);
+    fput32(Internal_Scan_Count,SUEF);
+    fputc(Internal_ModeReg,SUEF);
+    fputc(Internal_CurrentTrack[0],SUEF);
+    fputc(Internal_CurrentTrack[1],SUEF);
+    fputc(Internal_DriveControlOutputPort,SUEF);
+    fputc(Internal_DriveControlInputPort,SUEF);
+    fputc(Internal_BadTracks[0][0],SUEF);
+    fputc(Internal_BadTracks[0][1],SUEF);
+    fputc(Internal_BadTracks[1][0],SUEF);
+    fputc(Internal_BadTracks[1][1],SUEF);
+    fput32(ThisCommand,SUEF);
+    fput32(NParamsInThisCommand,SUEF);
+    fput32(PresentParam,SUEF);
+    fwrite(Params,1,16,SUEF);
+    fput32(NumHeads[0],SUEF);
+    fput32(NumHeads[1],SUEF);
+    fput32(Selects[0],SUEF);
+    fput32(Selects[1],SUEF);
+    fput32(Writeable[0],SUEF);
+    fput32(Writeable[1],SUEF);
+    fput32(FirstWriteInt,SUEF);
+    fput32(NextInterruptIsErr,SUEF);
+    fput32(CommandStatus.TrackAddr,SUEF);
+    fput32(CommandStatus.CurrentSector,SUEF);
+    fput32(CommandStatus.SectorLength,SUEF);
+    fput32(CommandStatus.SectorsToGo,SUEF);
+    fput32(CommandStatus.ByteWithinSector,SUEF);
+}
+
+void Load8271UEF(FILE *SUEF)
+{
+    extern bool DiscLoaded[2];
+    char FileName[256];
+    char *ext;
+    int Loaded=0;
+    int LoadFailed=0;
+
+    // Clear out current images, don't want them corrupted if
+    // saved state was in middle of writing to disc.
+    FreeDiscImage(0);
+    FreeDiscImage(1);
+    DiscLoaded[0]=FALSE;
+    DiscLoaded[1]=FALSE;
+
+    fread(FileName,1,256,SUEF);
+    if (FileName[0]) {
+        // Load drive 0
+        Loaded=1;
+        ext = strrchr(FileName, '.');
+        if (ext != NULL && stricmp(ext+1, "dsd") == 0)
+            LoadSimpleDSDiscImage(FileName, 0, 80);
+        else
+            LoadSimpleDiscImage(FileName, 0, 0, 80);
+
+        if (DiscStore[0][0][0].Sectors == NULL)
+            LoadFailed=1;
+    }
+
+    fread(FileName,1,256,SUEF);
+    if (FileName[0]) {
+        // Load drive 1
+        Loaded=1;
+        ext = strrchr(FileName, '.');
+        if (ext != NULL && stricmp(ext+1, "dsd") == 0)
+            LoadSimpleDSDiscImage(FileName, 1, 80);
+        else
+            LoadSimpleDiscImage(FileName, 1, 0, 80);
+
+        if (DiscStore[1][0][0].Sectors == NULL)
+            LoadFailed=1;
+    }
+
+    if (Loaded && !LoadFailed)
+    {
+        Disc8271Trigger=fget32(SUEF);
+        if (Disc8271Trigger != CycleCountTMax)
+            Disc8271Trigger+=TotalCycles;
+
+        ResultReg=fgetc(SUEF);
+        StatusReg=fgetc(SUEF);
+        DataReg=fgetc(SUEF);
+        Internal_Scan_SectorNum=fgetc(SUEF);
+        Internal_Scan_Count=fget32(SUEF);
+        Internal_ModeReg=fgetc(SUEF);
+        Internal_CurrentTrack[0]=fgetc(SUEF);
+        Internal_CurrentTrack[1]=fgetc(SUEF);
+        Internal_DriveControlOutputPort=fgetc(SUEF);
+        Internal_DriveControlInputPort=fgetc(SUEF);
+        Internal_BadTracks[0][0]=fgetc(SUEF);
+        Internal_BadTracks[0][1]=fgetc(SUEF);
+        Internal_BadTracks[1][0]=fgetc(SUEF);
+        Internal_BadTracks[1][1]=fgetc(SUEF);
+        ThisCommand=fget32(SUEF);
+        NParamsInThisCommand=fget32(SUEF);
+        PresentParam=fget32(SUEF);
+        fread(Params,1,16,SUEF);
+        NumHeads[0]=fget32(SUEF);
+        NumHeads[1]=fget32(SUEF);
+        Selects[0]=fget32(SUEF);
+        Selects[1]=fget32(SUEF);
+        Writeable[0]=fget32(SUEF);
+        Writeable[1]=fget32(SUEF);
+        FirstWriteInt=fget32(SUEF);
+        NextInterruptIsErr=fget32(SUEF);
+        CommandStatus.TrackAddr=fget32(SUEF);
+        CommandStatus.CurrentSector=fget32(SUEF);
+        CommandStatus.SectorLength=fget32(SUEF);
+        CommandStatus.SectorsToGo=fget32(SUEF);
+        CommandStatus.ByteWithinSector=fget32(SUEF);
+
+        CommandStatus.CurrentTrackPtr=GetTrackPtr(CommandStatus.TrackAddr);
+        if (CommandStatus.CurrentTrackPtr!=NULL)
+            CommandStatus.CurrentSectorPtr=GetSectorPtr(CommandStatus.CurrentTrackPtr,CommandStatus.CurrentSector,0);
+        else
+            CommandStatus.CurrentSectorPtr=NULL;
+    }
+}
 
 /*--------------------------------------------------------------------------*/
 void disc8271_dumpstate(void) {

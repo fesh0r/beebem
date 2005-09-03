@@ -80,6 +80,34 @@
 #define IDI_BEEBEM                      102
 #define IDD_USERKYBRD                   103
 #define IDD_DIALOG1                     106
+#define IDD_DEBUG                       110
+#define IDD_TAPECONTROL                 112
+#define IDC_DEBUGBREAK                  1010
+#define IDC_DEBUGRESTART                1011
+#define IDC_DEBUGINFO                   1015
+#define IDC_DEBUGCOMMAND                1016
+#define IDC_DEBUGEXECUTE                1017
+#define IDC_DEBUGVIDEO                  1022
+#define IDC_DEBUGVIDEOBRK               1023
+#define IDC_DEBUGSYSVIA                 1024
+#define IDC_DEBUGSYSVIABRK              1025
+#define IDC_DEBUGUSERVIA                1026
+#define IDC_DEBUGUSERVIABRK             1027
+#define IDC_DEBUGBREAKPOINTS            1028
+#define IDC_DEBUGBPS                    1029
+#define IDC_DEBUGOS                     1030
+#define IDC_DEBUGROM                    1031
+#define IDC_TCMAP                       1031
+#define IDC_DEBUGTUBE                   1032
+#define IDC_TCPLAY                      1032
+#define IDC_DEBUGTUBEBRK                1033
+#define IDC_TCSTOP                      1033
+#define IDC_DEBUGHOST                   1034
+#define IDC_TCRECORD                    1034
+#define IDC_DEBUGPARASITE               1035
+#define IDC_TCEJECT                     1035
+#define IDC_DEBUGSERIAL                 1036
+#define IDC_DEBUGSERIALBRK              1037
 #define IDM_ABOUT                       40001
 #define IDM_DISC                        40002
 #define IDM_LOADDISC0                   40002
@@ -113,8 +141,8 @@
 #define IDM_MOUSESTICK                  40031
 #define IDM_HIDECURSOR                  40032
 #define IDM_IGNOREILLEGALOPS            40033
-#define IDM_KEYBOARDMAPPING1            40034
-#define IDM_KEYBOARDMAPPING2            40035
+#define IDM_DEFAULTKYBDMAPPING          40034
+#define IDM_LOGICALKYBDMAPPING          40035
 #define IDM_3QSPEED                     40036
 #define IDM_HALFSPEED                   40037
 #define IDM_SAVESTATE                   40039
@@ -137,7 +165,6 @@
 #define IDM_ALLOWWRITES_ROMD            40056
 #define IDM_ALLOWWRITES_ROME            40057
 #define IDM_ALLOWWRITES_ROMF            40058
-#define IDM_ALLOWALLROMWRITES           40059
 #define IDM_USERKYBDMAPPING             40060
 #define IDM_DEFINEKEYMAP                40061
 #define IDM_NEWDISC0                    40062
@@ -187,7 +214,6 @@
 #define ID_REWINDTAPE                   40116
 #define ID_SFX_RELAY                    40117
 #define IDM_TUBE                        40118
-#define IDM_TUBERESET                   40119
 #define ID_HIDEMENU                     40121
 #define ID_TAPESOUND                    40122
 #define ID_SERIAL                       40123
@@ -215,15 +241,43 @@
 #define ID_PSAMPLES                     40147
 #define ID_1773                         40149
 #define ID_443                          40150
+#define IDM_FIXEDSPEED100               40151
+#define IDM_FIXEDSPEED5                 40154
+#define IDM_FIXEDSPEED2                 40155
+#define IDM_FIXEDSPEED1_5               40156
+#define IDM_FIXEDSPEED1_25              40157
+#define IDM_FIXEDSPEED1_1               40158
+#define IDM_FIXEDSPEED0_9               40159
+#define IDM_FIXEDSPEED0_75              40160
+#define IDM_FIXEDSPEED50                40161
+#define IDM_FIXEDSPEED0_25              40162
+#define IDM_FIXEDSPEED10                40163
+#define IDM_FIXEDSPEED0_5               40164
+#define IDM_FIXEDSPEED0_1               40165
+#define IDM_VIEWREADME                  40166
+#define IDM_MAPAS                       40167
+#define IDM_MAPFUNCS                    40168
+#define IDM_RUNDISC                     40169
+#define ID_MODELBINT                    40170
+#define ID_MODELBP                      40171
+#define IDM_SHOWDEBUGGER                40173
+#define ID_TAPECONTROL                  40174
+#define IDM_SOUNDCHIP                   40175
+#define ID_UNLOCKTAPE                   40176
+#define IDM_BLUR_OFF                    40177
+#define IDM_BLUR_2                      40178
+#define IDM_BLUR_4                      40179
+#define IDM_BLUR_8                      40180
+#define IDM_TORCH                       40181
 
 // Next default values for new objects
 //
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NO_MFC                     1
-#define _APS_NEXT_RESOURCE_VALUE        108
-#define _APS_NEXT_COMMAND_VALUE         40151
-#define _APS_NEXT_CONTROL_VALUE         1009
+#define _APS_NEXT_RESOURCE_VALUE        113
+#define _APS_NEXT_COMMAND_VALUE         40182
+#define _APS_NEXT_CONTROL_VALUE         1034
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

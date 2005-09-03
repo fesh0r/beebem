@@ -50,7 +50,9 @@ int DumpAfterEach=0;
 unsigned char MachineType;
 BeebWin *mainWin = NULL;
 HINSTANCE hInst;
+HWND hCurrentDialog = NULL;
 DWORD iSerialThread,iStatThread; // Thread IDs
+FILE *tlog;
 
 int CALLBACK WinMain(HINSTANCE hInstance,
                     HINSTANCE hPrevInstance,
@@ -73,6 +75,11 @@ int CALLBACK WinMain(HINSTANCE hInstance,
     InitThreads();
     CreateThread(NULL,0,(LPTHREAD_START_ROUTINE) SerialThread,NULL,0,&iSerialThread);
     CreateThread(NULL,0,(LPTHREAD_START_ROUTINE) StatThread,NULL,0,&iStatThread);
+
+    mainWin->HandleCommandLine(lpszCmdLine);
+
+//    tlog = fopen("\\trace.log", "wt");
+
     do
     {
         if(PeekMessage(&msg, NULL, 0, 0, PM_NOREMOVE) || mainWin->IsFrozen())
@@ -83,8 +90,10 @@ int CALLBACK WinMain(HINSTANCE hInstance,
                             0))
                 break;              // Quit the app on WM_QUIT
 
-            TranslateMessage(&msg);// Translates virtual key codes
-            DispatchMessage(&msg); // Dispatches message to window
+            if (hCurrentDialog == NULL || !IsDialogMessage(hCurrentDialog, &msg)) {
+                TranslateMessage(&msg);// Translates virtual key codes
+                DispatchMessage(&msg); // Dispatches message to window
+            }
         }
 
         if (!mainWin->IsFrozen()) {
@@ -93,6 +102,8 @@ int CALLBACK WinMain(HINSTANCE hInstance,
     } while(1);
 
     mainWin->KillDLLs();
+
+//    fclose(tlog);
 
     delete mainWin;
     Kill_Serial();

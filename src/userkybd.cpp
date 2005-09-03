@@ -102,8 +102,8 @@ int UserKeymap[256][2]={
     0,0,    6,2,    0,0,    0,0,   // 92  . SPACE ..
     0,0,    0,0,    0,0,    0,0,   // 96
     0,0,    0,0,    0,0,    0,0,   // 100
-    0,0,    0,0,    0,0,    0,0,   // 104
-    0,0,    0,0,    0,0,    0,0,   // 108
+    0,0,    0,0,    0,0,    -4,0,  // 104 Keypad+
+    0,0,    -4,1,   0,0,    0,0,   // 108 Keypad-
     7,1,    7,2,    7,3,    1,4,   // 112 F1 F2 F3 F4
     7,4,    7,5,    1,6,    7,6,   // 116 F5 F6 F7 F8
     7,7,    2,0,    2,0,    -2,-2, // 120 F9 F10 F11 F12
@@ -278,6 +278,7 @@ int nCode = HIWORD(wParam);              //Notification code
         };
         return TRUE;
 
+    case WM_SYSKEYUP:
     case WM_KEYUP:
         ShowKeyUp();
         SetBBCKeyForVKEY( wParam );
@@ -563,6 +564,7 @@ LRESULT CALLBACK GetKeyWndProc( HWND hWnd,         // window handle
         PostMessage( hWnd, WM_CLOSE, 0, 0L );
         break;
 
+    case WM_SYSKEYUP:
     case WM_KEYUP:
         // Assign the BBC key to the PC key.
         SetBBCKeyForVKEY( (int) uParam );
@@ -620,17 +622,37 @@ LPSTR KeyName( UINT Key )
     case   9: return "Tab";
     case  13: return "Enter";
     case  17: return "Ctrl";
+    case  18: return "Alt";
     case  19: return "Break";
     case  20: return "Caps";
     case  27: return "Esc";
     case  32: return "Spacebar";
+    case  33: return "PgUp";
+    case  34: return "PgDn";
     case  35: return "End";
+    case  36: return "Home";
     case  37: return "Left";
     case  38: return "Up";
     case  39: return "Right";
     case  40: return "Down";
+    case  45: return "Insert";
     case  46: return "Del";
-    case  93: return "Spacebar";
+    case  93: return "Menu";
+    case  96: return "Pad0";
+    case  97: return "Pad1";
+    case  98: return "Pad2";
+    case  99: return "Pad3";
+    case 100: return "Pad4";
+    case 101: return "Pad5";
+    case 102: return "Pad6";
+    case 103: return "Pad7";
+    case 104: return "Pad8";
+    case 105: return "Pad9";
+    case 106: return "Pad*";
+    case 107: return "Pad+";
+    case 109: return "Pad-";
+    case 110: return "Pad.";
+    case 111: return "Pad/";
     case 112: return "F1";
     case 113: return "F2";
     case 114: return "F3";
@@ -643,19 +665,20 @@ LPSTR KeyName( UINT Key )
     case 121: return "F10";
     case 122: return "F11";
     case 123: return "F12";
-
+    case 144: return "NumLock";
+    case 145: return "SclLock";
     case 186: return ";";
     case 187: return "=";
     case 188: return ",";
     case 189: return "-";
     case 190: return ".";
     case 191: return "/";
-    case 192: return "~";
+    case 192: return "\'";
     case 219: return "[";
     case 220: return "\\";
     case 221: return "]";
     case 222: return "#";
-    case 223: return "\'";
+    case 223: return "`";
 
     default:
         Character[0] = (CHAR) LOBYTE( Key );

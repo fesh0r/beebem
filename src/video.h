@@ -64,8 +64,10 @@ extern unsigned char TeletextEnabled;
 
 #define VideoPoll(ncycles) if ((VideoTriggerCount)<=TotalCycles) VideoDoScanLine();
 
-void SaveVideoState(unsigned char *StateData);
-void RestoreVideoState(unsigned char *StateData);
+// Allow enough lines for all modes.
+// i.e. max(virtical total * scan lines per char) = 38 * 8  (mode 7 excluded)
+#define MAX_VIDEO_SCAN_LINES 304
+
 void SaveVideoUEF(FILE *SUEF);
 void LoadVideoUEF(FILE *SUEF);
 extern char TeletextStyle;

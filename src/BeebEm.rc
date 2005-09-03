@@ -234,17 +234,17 @@ BEGIN
     BEGIN
         BLOCK "040904b0"
         BEGIN
-            VALUE "Comments", "\0"
-            VALUE "CompanyName", "Portsmouth\0"
+            VALUE "Comments", "BeebEm - BBC Micro Emulator\0"
+            VALUE "CompanyName", "-\0"
             VALUE "FileDescription", "BeebEm\0"
-            VALUE "FileVersion", "1, 0, 0, 1\0"
+            VALUE "FileVersion", "2.3\0"
             VALUE "InternalName", "BeebEm\0"
-            VALUE "LegalCopyright", "Copyright © 2001\0"
+            VALUE "LegalCopyright", "Copyright © 2005\0"
             VALUE "LegalTrademarks", "\0"
             VALUE "OriginalFilename", "BeebEm.exe\0"
             VALUE "PrivateBuild", "\0"
-            VALUE "ProductName", "Portsmouth BeebEm\0"
-            VALUE "ProductVersion", "1, 0, 0, 1\0"
+            VALUE "ProductName", "BeebEm\0"
+            VALUE "ProductVersion", "2.3\0"
             VALUE "SpecialBuild", "\0"
         END
     END
@@ -271,6 +271,98 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_UK
 
 /////////////////////////////////////////////////////////////////////////////
 //
+// Dialog
+//
+
+IDD_DEBUG DIALOG DISCARDABLE  0, 0, 532, 382
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "BeebEm Debugger"
+FONT 8, "MS Sans Serif"
+BEGIN
+    DEFPUSHBUTTON   "Execute Command",IDC_DEBUGEXECUTE,449,361,75,14
+    PUSHBUTTON      "Break Execution",IDC_DEBUGBREAK,449,7,75,14
+    PUSHBUTTON      "Restart",IDC_DEBUGRESTART,449,25,75,14
+    LISTBOX         IDC_DEBUGINFO,7,7,432,347,NOT LBS_NOTIFY |
+                    LBS_NOINTEGRALHEIGHT | LBS_NOSEL | WS_VSCROLL
+    EDITTEXT        IDC_DEBUGCOMMAND,7,362,432,13,ES_AUTOHSCROLL
+    CONTROL         "Video",IDC_DEBUGVIDEO,"Button",BS_AUTOCHECKBOX |
+                    BS_LEFTTEXT | WS_TABSTOP,461,64,34,10
+    CONTROL         "",IDC_DEBUGVIDEOBRK,"Button",BS_AUTOCHECKBOX |
+                    WS_TABSTOP,504,64,16,10
+    LTEXT           "Trace  Break",IDC_STATIC,478,49,42,8
+    CONTROL         "System Via",IDC_DEBUGSYSVIA,"Button",BS_AUTOCHECKBOX |
+                    BS_LEFTTEXT | WS_TABSTOP,444,80,51,10
+    CONTROL         "",IDC_DEBUGSYSVIABRK,"Button",BS_AUTOCHECKBOX |
+                    WS_TABSTOP,504,80,16,10
+    CONTROL         "User Via",IDC_DEBUGUSERVIA,"Button",BS_AUTOCHECKBOX |
+                    BS_LEFTTEXT | WS_TABSTOP,452,96,43,10
+    CONTROL         "",IDC_DEBUGUSERVIABRK,"Button",BS_AUTOCHECKBOX |
+                    WS_TABSTOP,504,96,16,10
+    LISTBOX         IDC_DEBUGBREAKPOINTS,449,261,75,83,LBS_SORT |
+                    LBS_NOINTEGRALHEIGHT | WS_VSCROLL | WS_TABSTOP
+    CONTROL         "Breakpoints",IDC_DEBUGBPS,"Button",BS_AUTOCHECKBOX |
+                    BS_LEFTTEXT | WS_TABSTOP,460,248,53,10
+    CONTROL         "Debug OS",IDC_DEBUGOS,"Button",BS_AUTOCHECKBOX |
+                    BS_LEFTTEXT | WS_TABSTOP,464,230,49,10
+    CONTROL         "Debug ROM",IDC_DEBUGROM,"Button",BS_AUTOCHECKBOX |
+                    BS_LEFTTEXT | WS_TABSTOP,457,214,56,10
+    CONTROL         "Tube",IDC_DEBUGTUBE,"Button",BS_AUTOCHECKBOX |
+                    BS_LEFTTEXT | WS_TABSTOP,462,112,33,10
+    CONTROL         "",IDC_DEBUGTUBEBRK,"Button",BS_AUTOCHECKBOX |
+                    WS_TABSTOP,504,112,16,10
+    CONTROL         "Debug Host",IDC_DEBUGHOST,"Button",BS_AUTOCHECKBOX |
+                    BS_LEFTTEXT | WS_TABSTOP,459,182,54,10
+    CONTROL         "Debug Parasite",IDC_DEBUGPARASITE,"Button",
+                    BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,448,198,65,10
+    CONTROL         "Serial",IDC_DEBUGSERIAL,"Button",BS_AUTOCHECKBOX |
+                    BS_LEFTTEXT | WS_TABSTOP,462,128,33,10
+    CONTROL         "",IDC_DEBUGSERIALBRK,"Button",BS_AUTOCHECKBOX |
+                    WS_TABSTOP,504,128,16,10
+END
+
+IDD_TAPECONTROL DIALOG DISCARDABLE  0, 0, 187, 382
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "BeebEm Tape Control"
+FONT 8, "MS Sans Serif"
+BEGIN
+    DEFPUSHBUTTON   "Play",IDC_TCPLAY,7,359,40,16
+    PUSHBUTTON      "Stop",IDC_TCSTOP,51,359,40,16
+    LISTBOX         IDC_TCMAP,7,7,173,347,LBS_NOINTEGRALHEIGHT | WS_VSCROLL |
+                    WS_TABSTOP
+    PUSHBUTTON      "Record",IDC_TCRECORD,140,359,40,16
+    PUSHBUTTON      "Eject",IDC_TCEJECT,95,359,40,16
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// DESIGNINFO
+//
+
+#ifdef APSTUDIO_INVOKED
+GUIDELINES DESIGNINFO DISCARDABLE
+BEGIN
+    IDD_DEBUG, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 524
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 375
+    END
+
+    IDD_TAPECONTROL, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 180
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 375
+    END
+END
+#endif    // APSTUDIO_INVOKED
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
 // Menu
 //
 
@@ -278,6 +370,8 @@ IDR_MENU MENU DISCARDABLE
 BEGIN
     POPUP "&File"
     BEGIN
+        MENUITEM "&Run Disc",                   IDM_RUNDISC
+        MENUITEM SEPARATOR
         MENUITEM "Load Disc &0",                IDM_LOADDISC0
         MENUITEM "Load Disc &1",                IDM_LOADDISC1
         MENUITEM SEPARATOR
@@ -288,7 +382,8 @@ BEGIN
         MENUITEM "Write Protect 0",             IDM_WPDISC0
         MENUITEM "Write Protect 1",             IDM_WPDISC1
         MENUITEM SEPARATOR
-        MENUITEM "&Reset",                      ID_FILE_RESET
+        MENUITEM "R&eset",                      ID_FILE_RESET
+        MENUITEM SEPARATOR
         MENUITEM "&Load State",                 IDM_LOADSTATE
         MENUITEM "&Save State",                 IDM_SAVESTATE
         MENUITEM "&Quick Load",                 IDM_QUICKLOAD
@@ -306,6 +401,9 @@ BEGIN
             MENUITEM "Normal",                      ID_TAPE_NORMAL
         END
         MENUITEM "Rewind &Tape",                ID_REWINDTAPE
+        MENUITEM "&Unlock Tape",                ID_UNLOCKTAPE
+        MENUITEM "Tape &Control",               ID_TAPECONTROL
+        MENUITEM SEPARATOR
         MENUITEM "&Printer On/Off",             IDM_PRINTERONOFF
         POPUP "Printer &Destination"
         BEGIN
@@ -315,6 +413,7 @@ BEGIN
             MENUITEM "LPT3:",                       IDM_PRINTER_LPT3
             MENUITEM "LPT4:",                       IDM_PRINTER_LPT4
         END
+        MENUITEM SEPARATOR
         MENUITEM "RS423 On/Off",                ID_SERIAL
         POPUP "&RS423 Destination"
         BEGIN
@@ -367,12 +466,34 @@ BEGIN
             MENUITEM "Show &Keyboard LEDs",         ID_SHOW_KBLEDS
             MENUITEM "Show &Disc LEDs",             ID_SHOW_DISCLEDS
         END
+        POPUP "&Motion Blur"
+        BEGIN
+            MENUITEM "Off",                         IDM_BLUR_OFF
+            MENUITEM "2 Frames",                    IDM_BLUR_2
+            MENUITEM "4 Frames",                    IDM_BLUR_4
+            MENUITEM "8 Frames",                    IDM_BLUR_8
+        END
     END
     POPUP "S&peed"
     BEGIN
         MENUITEM "&Real Time",                  IDM_REALTIME
-        MENUITEM "3/4 Speed",                   IDM_3QSPEED
-        MENUITEM "1/2 Speed",                   IDM_HALFSPEED
+        POPUP "&Fixed Speed"
+        BEGIN
+            MENUITEM "100",                         IDM_FIXEDSPEED100
+            MENUITEM "50",                          IDM_FIXEDSPEED50
+            MENUITEM "10",                          IDM_FIXEDSPEED10
+            MENUITEM "5",                           IDM_FIXEDSPEED5
+            MENUITEM "2",                           IDM_FIXEDSPEED2
+            MENUITEM "1.5",                         IDM_FIXEDSPEED1_5
+            MENUITEM "1.25",                        IDM_FIXEDSPEED1_25
+            MENUITEM "1.1",                         IDM_FIXEDSPEED1_1
+            MENUITEM "0.9",                         IDM_FIXEDSPEED0_9
+            MENUITEM "0.75",                        IDM_FIXEDSPEED0_75
+            MENUITEM "0.5",                         IDM_FIXEDSPEED0_5
+            MENUITEM "0.25",                        IDM_FIXEDSPEED0_25
+            MENUITEM "0.1",                         IDM_FIXEDSPEED0_1
+        END
+        MENUITEM SEPARATOR
         MENUITEM "50 FPS",                      IDM_50FPS
         MENUITEM "25 FPS",                      IDM_25FPS
         MENUITEM "10 FPS",                      IDM_10FPS
@@ -382,6 +503,7 @@ BEGIN
     POPUP "&Sound"
     BEGIN
         MENUITEM "&Sound On/Off",               IDM_SOUNDONOFF
+        MENUITEM "Sound Chip",                  IDM_SOUNDCHIP
         MENUITEM SEPARATOR
         POPUP "Sound &Effects"
         BEGIN
@@ -398,7 +520,6 @@ BEGIN
         MENUITEM "&Medium Volume",              IDM_MEDIUMVOLUME
         MENUITEM "&Low Volume",                 IDM_LOWVOLUME
         MENUITEM SEPARATOR
-        MENUITEM "&Use Host Clock",             ID_HOSTCLOCK
         MENUITEM "Use &Primary Buffer",         ID_PBUFF
         MENUITEM "Part S&amples",               ID_PSAMPLES
     END
@@ -419,11 +540,13 @@ BEGIN
         MENUITEM "Adjust -30%",                 IDM_AMX_ADJUSTM30
         MENUITEM "Adjust -50%",                 IDM_AMX_ADJUSTM50
     END
-    POPUP "&Options"
+    POPUP "&Hardware"
     BEGIN
         POPUP "&BBC Model"
         BEGIN
             MENUITEM "BBC Model &B",                ID_MODELB, CHECKED
+            MENUITEM "BBC Model B + &Integra-B",    ID_MODELBINT
+            MENUITEM "BBC Model B &Plus",           ID_MODELBP
             MENUITEM "BBC &Master 128",             ID_MASTER128
         END
         POPUP "Model B &Floppy Controller"
@@ -431,9 +554,11 @@ BEGIN
             MENUITEM "Native &8271",                ID_8271
             MENUITEM "&Select FDC Board...",        ID_FDC_DLL
         END
+        MENUITEM "65C02 &Second Processor",     IDM_TUBE
+        MENUITEM "Torch &Z80 Second Processor", IDM_TORCH
+        MENUITEM SEPARATOR
         POPUP "&Allow ROM writes"
         BEGIN
-            MENUITEM "All &Roms",                   IDM_ALLOWALLROMWRITES
             MENUITEM "Rom &0",                      IDM_ALLOWWRITES_ROM0
             , CHECKED
             MENUITEM "Rom &1",                      IDM_ALLOWWRITES_ROM1
@@ -467,40 +592,47 @@ BEGIN
             MENUITEM "Rom &F",                      IDM_ALLOWWRITES_ROMF
             , CHECKED
         END
+        MENUITEM SEPARATOR
         MENUITEM "&Ignore Illegal Instructions", IDM_IGNOREILLEGALOPS
-        MENUITEM SEPARATOR
-        MENUITEM "&Joystick",                   IDM_JOYSTICK
-        MENUITEM "&Mousestick",                 IDM_MOUSESTICK
-        MENUITEM SEPARATOR
-        MENUITEM "Freeze when inactive",        IDM_FREEZEINACTIVE
-        MENUITEM "&Hide Cursor",                IDM_HIDECURSOR
-        MENUITEM SEPARATOR
-        MENUITEM "&Define User Keyboard",       IDM_DEFINEKEYMAP
-        MENUITEM SEPARATOR
-        MENUITEM "&User Defined Mapping",       IDM_USERKYBDMAPPING
-        MENUITEM "Keyboard Mapping &1",         IDM_KEYBOARDMAPPING1
-        MENUITEM "Keyboard Mapping &2",         IDM_KEYBOARDMAPPING2
-        MENUITEM SEPARATOR
-        MENUITEM "&Save Preferences",           IDM_SAVE_PREFS
-    END
-    POPUP "Opti&mise"
-    BEGIN
         POPUP "&Undocumented Instructions"
         BEGIN
             MENUITEM "&Documented Only",            ID_DOCONLY
             MENUITEM "&Common Extras",              ID_EXTRAS
             MENUITEM "&Full Set",                   ID_FULLSET
         END
-        MENUITEM "&Teletext Half Mode",         ID_TSTYLE
+        MENUITEM SEPARATOR
         MENUITEM "Basic &Hardware Only",        ID_BHARDWARE
-        POPUP "&Sound Block Size"
+        MENUITEM "&Teletext Half Mode",         ID_TSTYLE
+        POPUP "Sound Block Si&ze"
         BEGIN
             MENUITEM "&1772 Bytes",                 ID_1773
             MENUITEM "&441 Bytes",                  ID_443
         END
     END
+    POPUP "&Options"
+    BEGIN
+        MENUITEM "&Joystick",                   IDM_JOYSTICK
+        MENUITEM "&Mousestick",                 IDM_MOUSESTICK
+        MENUITEM SEPARATOR
+        MENUITEM "&Freeze when inactive",       IDM_FREEZEINACTIVE
+        MENUITEM "&Hide Cursor",                IDM_HIDECURSOR
+        MENUITEM SEPARATOR
+        MENUITEM "&Define User Keyboard",       IDM_DEFINEKEYMAP
+        MENUITEM SEPARATOR
+        MENUITEM "&User Defined Mapping",       IDM_USERKYBDMAPPING
+        MENUITEM "Default &Keyboard Mapping",   IDM_DEFAULTKYBDMAPPING
+        MENUITEM "&Logical Keyboard Mapping",   IDM_LOGICALKYBDMAPPING
+        MENUITEM SEPARATOR
+        MENUITEM "Map A,S to CAPS,CTRL",        IDM_MAPAS
+        MENUITEM "Map F1-F10 to f0-f9",         IDM_MAPFUNCS
+        MENUITEM SEPARATOR
+        MENUITEM "Debu&gger",                   IDM_SHOWDEBUGGER
+        MENUITEM SEPARATOR
+        MENUITEM "&Save Preferences",           IDM_SAVE_PREFS
+    END
     POPUP "&Help"
     BEGIN
+        MENUITEM "View &README",                IDM_VIEWREADME
         MENUITEM "&About BeebEm",               IDM_ABOUT
     END
 END

@@ -11,8 +11,8 @@ typedef struct {
   int timer1l,timer2l; /*   fixed up on read/write - latches hold 1MHz values*/
   int timer1hasshot; /* True if we have already caused an interrupt for one shot mode */
   int timer2hasshot; /* True if we have already caused an interrupt for one shot mode */
-  int timer2adjust; // Adjustment for 1.5 cycle counts, every other interrupt, it becomes
-  // 2 cycles instead of one
+  int timer1adjust; // Adjustment for 1.5 cycle counts, every other interrupt, it becomes 2 cycles instead of one
+  int timer2adjust; // Adjustment for 1.5 cycle counts, every other interrupt, it becomes 2 cycles instead of one
 } VIAState;
 
 #endif

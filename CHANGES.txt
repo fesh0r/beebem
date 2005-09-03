@@ -96,6 +96,13 @@ Printer support.
 Improved ROM size checking.
 Improved speed regulation code.
 
+Version 1.01 (Mike Wyatt)
+------------
+Fixes the problem with BeebEm hanging after about 35 minutes.
+
+Version 1.02 (Mike Wyatt)
+------------
+Added Robert's Freeze when Inactive option.
 
 Version 1.03 (Robert Schmidt)
 ------------
@@ -219,3 +226,99 @@ Windows update only:
 * Re-worked HSync/VSync centering routine
 * Added option to use DirectSound primary buffer
 
+Version 1.5 (Mike Wyatt)
+-----------
+* Updated the speed regulation code again (should fix hangs).
+* Added some more fixed speed settings (you can now play Elite at a
+  decent speed!).
+* Put quick load and save back the right way!
+* Add a link to the README file to the help menu.
+* Changed keyboard maps to default and logical layouts.  The default
+  mapping is the same as the old mapping 1.  Logical mapping maps symbol
+  by symbol (for a UK PC keyboard at least) so you get what you press.
+* Added keyboard mapping options for A & S and function keys.
+* Changed ALT and F10 to normal keys so they no longer select the menu.
+  F10 is mapped to f0.
+* Made more of the PC keys available for the user defined keyboard.
+* Added the File -> Run Disc menu option.
+* Added ability to pass name of disc image on command line to run it
+  automatically.
+* Removed Use Host Clock option from sound menu - its not used.
+* Fixed Windows cursor when BeebEm starts up.
+* Add some sleeps to the serial comms threads so BeebEm is a bit
+  easier on CPU usage.
+* Added some extra error checking for file handling.
+* Stopped BeebEm from creating the C:\crtc.log file (you can
+  remove this file).
+* Tidied up the BeebEm installation directory.  The source code
+  is now kept in a zip file.
+* Moved all preference settings into the Windows registry.
+
+Version 1.6 (Ken Lowe & Mike Wyatt)
+-----------
+* Added BBC Computech IntegraB Support:
+  RTC Memory
+  Private Memory 1K from &8000 to &83FF
+  Private Memory 4K from &8000 to &8FFF
+  Private Memory 8K from &9000 to &AFFF
+  20K Shadow RAM from &3000 to &7FFF
+* Added BBC Plus (128) Support
+  20K Shadow RAM from &3000 to &7FFF
+  12K Paged RAM
+  (Level 9 graphical adventures work in IntegraB & B Plus modes)
+* Fixed various bugs in Via Timers (Volcano, Nutcraka, Pedro and Skirmish
+  now work).
+* Fixed various bugs in UEF state store/restore, particularly for SW RAM
+  usage and Master 128 mode (Elite & Exile save/restore now reliable).
+* Added disc settings to the UEF state.  When a state is restored BeebEm
+  will load the disc images that were loaded when the state was stored.
+* Fixed various bugs in the video emulation (fixes Psycastria and Level 9
+  graphical adventures, improves FireTrack).
+* Changed video emulation so that *TV255 does not move screen down (*TV254
+  does though). Some programs do a *TV255 and the bottom line of the screen
+  is lost.
+* Fixed reload of drive 1 disc image after a File->Reset.
+* Fixed BeebDiscLoad environment variables in Model B modes.
+* Fixed ADFS boot (A+Break) in Master 128 mode.
+* Removed old BeebState stuff.
+* Removed 'Allow ROM Writes - All' option, it was not implemented.
+
+Version 2.0 (Mike Wyatt)
+-----------
+* Added tube and 65C02 second processor emulation.  It runs the Executive
+  version of Elite quite nicely but you will need a reasonably fast PC.
+* Added Debugger (see Readme.txt for details).
+* Fixed more bugs in the video emulation (fixes Uridium, improves Level 9
+  graphical adventures in Master mode).
+* Fixed bugs in the joystick and AtoD emulation (SuperPool now works and it
+  may fix problems with GamePads).
+* Tweaked sound tuning and noise generation.
+* Floppy controller selection is now saved for each Model B type.
+* Changed default DFS for B+ to the V2.26 Acorn 1770 DFS.
+* Rearranged menus a bit as options was getting too big.
+
+Version 2.1 (Mike Wyatt)
+-----------
+* Added a tape control window for moving the tape position.
+* Added support for saving files to UEF tape images.
+* Added support for more UEF tape chunk types.
+* Added menu option to mute sound chip so tape sound can be heard.
+* Added menu option to automatically unlock tape files.
+* Tape speed can now be changed without having to reload tape.
+* Added tape settings to the UEF state.
+* Added BeebEm speed shortcut keys, keypad +/- change speed.
+
+Version 2.2 (Greg Cook & Mike Wyatt)
+-----------
+* Fixed BeebEm hang when RS432 is enabled (Acorn Basic Editor works again).
+* Fixed LED positioning in modes other than 7.
+* Integrated Greg's 1770 disc controller fixes.
+* Fixed keyboard handling so Revs works correctly.
+
+Version 2.3 (Mike Wyatt, Greg Cook, Jon Welch)
+-----------
+* Added "Motion Blur" option to view menu (suggested by Ian Bell). This
+  all but stops the spaceship flicker in Elite.
+* More 1770 disc controller fixes from Greg.
+* Preliminary IDE hard disk support from Jon Welch.
+* Torch Z80 second processor emulation from Jon Welch (see README_Z80.TXT).

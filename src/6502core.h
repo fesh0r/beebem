@@ -46,6 +46,7 @@ extern unsigned char intStatus;
 extern unsigned char NMIStatus;
 extern unsigned int Cycles;
 extern int ProgramCounter;
+extern int PrePC;
 extern CycleCountT TotalCycles;
 extern unsigned int NMILock;
 extern int DisplayCycles;
@@ -65,8 +66,6 @@ void Init6502core(void);
 /* Execute one 6502 instruction, move program counter on                   */
 void Exec6502Instruction(void);
 
-void Save6502State(unsigned char *CPUState);
-void Restore6502State(unsigned char *CPUState);
 void DoNMI(void);
 void core_dumpstate(void);
 void DoInterrupt(void);
@@ -75,6 +74,4 @@ void Load6502UEF(FILE *SUEF);
 extern int SwitchOnCycles; // Reset delay
 extern int OpCodes;
 extern int BHardware;
-extern int SecCycles;
-extern bool HoldingCPU;
 #endif

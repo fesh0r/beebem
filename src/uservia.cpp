@@ -28,6 +28,7 @@
 #include "uservia.h"
 #include "via.h"
 #include "viastate.h"
+#include "debug.h"
 
 #ifdef WIN32
 #include <windows.h>
@@ -73,6 +74,12 @@ void UserVIAWrite(int Address, int Value) {
   /* cerr << "UserVIAWrite: Address=0x" << hex << Address << " Value=0x" << Value << dec << " at " << TotalCycles << "\n";
   DumpRegs(); */
 
+    if (DebugEnabled) {
+        char info[200];
+        sprintf(info, "UsrVia: Write address %X value %02X", (int)(Address & 0xf), Value & 0xff);
+        DebugDisplayTrace(DEBUG_USERVIA, true, info);
+    }
+
   switch (Address) {
     case 0:
       UserVIAState.orb=Value & 0xff;
@@ -112,8 +119,7 @@ void UserVIAWrite(int Address, int Value) {
       break;
 
     case 4:
-    case 6:
-      /*cerr << "UserVia Reg4/6 Timer1 lo Counter Write val=0x " << hex << Value << dec << " at " << TotalCycles << "\n"; */
+      /*cerr << "UserVia Reg4 Timer1 lo Counter Write val=0x " << hex << Value << dec << " at " << TotalCycles << "\n"; */
       UserVIAState.timer1l&=0xff00;
       UserVIAState.timer1l|=(Value & 0xff);
       break;
@@ -124,20 +130,30 @@ void UserVIAWrite(int Address, int Value) {
       UserVIAState.timer1l|=(Value & 0xff)<<8;
       UserVIAState.timer1c=UserVIAState.timer1l * 2;
       UserVIAState.ifr &=0xbf; /* clear timer 1 ifr */
-      UserVIAState.timer1hasshot=0;
       /* If PB7 toggling enabled, then lower PB7 now */
       if (UserVIAState.acr & 128) {
         UserVIAState.orb&=0x7f;
         UserVIAState.irb&=0x7f;
       };
       UpdateIFRTopBit();
+      UserVIAState.timer1hasshot=0; //Added by K.Lowe 24/08/03
       WTDelay1=4;
       break;
+
+//Added by K.Lowe 24/08/03
+    case 6:
+      /*cerr << "UserVia Reg6 Timer1 lo Counter Write val=0x " << hex << Value << dec << " at " << TotalCycles << "\n"; */
+      UserVIAState.timer1l&=0xff00;
+      UserVIAState.timer1l|=(Value & 0xff);
+      break;
+//End of Add
 
     case 7:
       /*cerr << "UserVia Reg7 Timer1 hi latch Write val=0x" << hex << Value << dec  << " at " << TotalCycles << "\n"; */
       UserVIAState.timer1l&=0xff;
       UserVIAState.timer1l|=(Value & 0xff)<<8;
+      UserVIAState.ifr &=0xbf; /* clear timer 1 ifr (this is what Model-B does) */
+      UpdateIFRTopBit();
       break;
 
     case 8:
@@ -154,6 +170,7 @@ void UserVIAWrite(int Address, int Value) {
       UserVIAState.timer2c=UserVIAState.timer2l * 2;
       UserVIAState.ifr &=0xdf; /* clear timer 2 ifr */
       UpdateIFRTopBit();
+      UserVIAState.timer2hasshot=0; //Added by K.Lowe 24/08/03
       WTDelay2=4;
       break;
 
@@ -174,7 +191,7 @@ void UserVIAWrite(int Address, int Value) {
       break;
 
     case 14:
-      /* cerr << "User VIA Write ier Value=" << Value << "\n"; */
+      // cerr << "User VIA Write ier Value=" << Value << "\n";
       if (Value & 0x80)
         UserVIAState.ier|=Value & 0xff;
       else
@@ -192,9 +209,10 @@ void UserVIAWrite(int Address, int Value) {
 /*--------------------------------------------------------------------------*/
 /* Address is in the range 0-f - with the fe60 stripped out */
 int UserVIARead(int Address) {
-  int tmp;
+  int tmp = 0xff;
   /* cerr << "UserVIARead: Address=0x" << hex << Address << dec << " at " << TotalCycles << "\n";
   DumpRegs(); */
+
   switch (Address) {
     case 0: /* IRB read */
       tmp=(UserVIAState.orb & UserVIAState.ddrb) | (UserVIAState.irb & (~UserVIAState.ddrb));
@@ -220,53 +238,51 @@ int UserVIARead(int Address) {
           ClearTrigger(AMXTrigger);
         }
       }
-      return(tmp);
+      break;
 
     case 2:
-      return(UserVIAState.ddrb);
+      tmp = UserVIAState.ddrb;
+      break;
 
     case 3:
-      return(UserVIAState.ddra);
+      tmp = UserVIAState.ddra;
+      break;
 
     case 4: /* Timer 1 lo counter */
-      tmp=UserVIAState.timer1c / 2;
+      tmp=(UserVIAState.timer1c / 2) & 0xff;
       UserVIAState.ifr&=0xbf; /* Clear bit 6 - timer 1 */
       UpdateIFRTopBit();
-      if (UserVIAState.timer1c<=(UserVIAState.timer1l*2))
-      return(tmp & 0xff);
-      else
-      return(0xff);
+      break;
 
-    case 5: /* Timer 1 ho counter */
-      tmp=UserVIAState.timer1c /512;
-      if (UserVIAState.timer1c<=(UserVIAState.timer1l*2))
-      return(tmp & 0xff);
-      else
-      return(0xff);
+    case 5: /* Timer 1 hi counter */
+      tmp=(UserVIAState.timer1c>>9) & 0xff;
+      break;
 
     case 6: /* Timer 1 lo latch */
-      return(UserVIAState.timer1l & 0xff);
+      tmp = UserVIAState.timer1l & 0xff;
+      break;
 
-    case 7: /* Timer 1 ho latch */
-      return((UserVIAState.timer1l / 256) & 0xff);
+    case 7: /* Timer 1 hi latch */
+      tmp = (UserVIAState.timer1l>>8) & 0xff;
+      break;
 
     case 8: /* Timer 2 lo counter */
-      tmp=UserVIAState.timer2c / 2;
+      tmp=(UserVIAState.timer2c / 2) & 0xff;
       UserVIAState.ifr&=0xdf; /* Clear bit 5 - timer 2 */
       UpdateIFRTopBit();
-      if (UserVIAState.timer2c<=(UserVIAState.timer2l*2))
-          return(tmp & 0xff);
-      else
-          return(0xff);
+      break;
 
-    case 9: /* Timer 2 ho counter */
-      if (UserVIAState.timer2c<=(UserVIAState.timer2l*2))
-        return((UserVIAState.timer2c / 512) & 0xff);
-      else
-          return(0xff);
+    case 9: /* Timer 2 hi counter */
+      tmp=(UserVIAState.timer2c>>9) & 0xff;
+      break;
+
+    case 11:
+      tmp = UserVIAState.acr;
+      break;
 
     case 12:
-      return(UserVIAState.pcr);
+      tmp = UserVIAState.pcr;
+      break;
 
     case 13:
       UpdateIFRTopBit();
@@ -274,16 +290,24 @@ int UserVIARead(int Address) {
       break;
 
     case 14:
-      return(UserVIAState.ier | 0x80);
+      tmp = UserVIAState.ier | 0x80;
+      break;
 
     case 1:
       UserVIAState.ifr&=0xfc;
       UpdateIFRTopBit();
     case 15:
-      return(255);
+      tmp = 255;
       break;
   } /* Address switch */
-  return(0xff);
+
+    if (DebugEnabled) {
+        char info[200];
+        sprintf(info, "UsrVia: Read address %X value %02X", (int)(Address & 0xf), tmp & 0xff);
+        DebugDisplayTrace(DEBUG_USERVIA, true, info);
+    }
+
+  return(tmp);
 } /* UserVIARead */
 
 /*--------------------------------------------------------------------------*/
@@ -315,15 +339,32 @@ void UserVIA_poll_real(void) {
   if (UserVIAState.timer2c<0) {
     tCycles=abs(UserVIAState.timer2c);
     /* cerr << "UserVIA timer2c\n"; */
-    UserVIAState.timer2c=(UserVIAState.timer2l * 2)+(tCycles-(3+UserVIAState.timer2adjust));
-    UserVIAState.timer2adjust=1-UserVIAState.timer2adjust;
-    if (!(UserVIAState.ifr&=0x20)) {
+    UserVIAState.timer2c=0x20000-tCycles; // Do not reload latches for T2
+    if (UserVIAState.timer2hasshot==0) {
      /* cerr << "UserVIA timer2c - int\n"; */
       UserVIAState.ifr|=0x20; /* Timer 2 interrupt */
       UpdateIFRTopBit();
     };
+    UserVIAState.timer2hasshot=1; // Added by K.Lowe 24/08/03
   } /* timer2c underflow */
 } /* UserVIA_poll */
+
+void UserVIA_poll(unsigned int ncycles) {
+  // Converted to a proc to allow shift register functions
+  UserVIAState.timer1c-=(ncycles-WTDelay1);
+  UserVIAState.timer2c-=(ncycles-WTDelay2);
+  WTDelay1=WTDelay2=0;
+  if ((UserVIAState.timer1c<0) || (UserVIAState.timer2c<0)) UserVIA_poll_real();
+  if (AMXMouseEnabled && AMXTrigger<=TotalCycles) AMXMouseMovement();
+  if (PrinterEnabled && PrinterTrigger<=TotalCycles) PrinterPoll();
+
+  // Do Shift register stuff
+//  if (SRMode==2) {
+      // Shift IN under control of Clock 2
+//    SRCount=8-(ncycles%8);
+//  }
+}
+
 
 /*--------------------------------------------------------------------------*/
 void UserVIAReset(void) {
@@ -331,16 +372,6 @@ void UserVIAReset(void) {
   ClearTrigger(AMXTrigger);
   ClearTrigger(PrinterTrigger);
 } /* UserVIAReset */
-
-/*-------------------------------------------------------------------------*/
-void SaveUserVIAState(unsigned char *StateData) {
-    SaveVIAState(&UserVIAState, StateData);
-}
-
-/*-------------------------------------------------------------------------*/
-void RestoreUserVIAState(unsigned char *StateData) {
-    RestoreVIAState(&UserVIAState, StateData);
-}
 
 /*-------------------------------------------------------------------------*/
 void AMXMouseMovement() {
@@ -438,3 +469,8 @@ void uservia_dumpstate(void) {
   cerr << "Uservia:\n";
   via_dumpstate(&UserVIAState);
 }; /* uservia_dumpstate */
+
+void DebugUserViaState()
+{
+    DebugViaState("UsrVia", &UserVIAState);
+}

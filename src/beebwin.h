@@ -63,23 +63,22 @@ class BeebWin  {
 
   public:
 
-  enum PaletteType { RGB, BW, AMBER, GREEN } palette_type;
+    enum PaletteType { RGB, BW, AMBER, GREEN } palette_type;
 
     void Initialise();
-
-    unsigned char cols[9];
 
     BeebWin();
     ~BeebWin();
 
-    HMENU   m_hMenu;
     void UpdateModelType();
     void SetSoundMenu(void);
     void SetPBuff(void);
     void SetImageName(char *DiscName,char Drive,char DType);
     void SetTapeSpeedMenu(void);
+    void SetDiscWriteProtects(void);
+    void SetRomMenu(void);              // LRW  Added for individual ROM/Ram
     void SelectFDC(void);
-    void LoadFDC(char *DLLName);
+    void LoadFDC(char *DLLName, bool save);
     void KillDLLs(void);
     void UpdateLEDMenu(HMENU hMenu);
     void SetDriveControl(unsigned char value);
@@ -90,46 +89,41 @@ class BeebWin  {
         { updateLines(m_hDC, starty, nlines); };
 
     void doHorizLine(unsigned long Col, int y, int sx, int width) {
-        if (((y*800)+sx+36+ScreenAdjust+width)>(500*800)) return;
-        if ((m_screen+(y*800)+sx+ScreenAdjust+36)<m_screen) return;
         if (TeletextEnabled) y/=TeletextStyle;
-        memset(m_screen+ (y* 800) + sx+((TeletextEnabled)?36+ScreenAdjust:ScreenAdjust), Col , width);
+        int d = (y*800)+sx+ScreenAdjust+(TeletextEnabled?36:0);
+        if ((d+width)>(500*800)) return;
+        if (d<0) return;
+        memset(m_screen+d, Col, width);
     };
 
     void doInvHorizLine(unsigned long Col, int y, int sx, int width) {
-        char *vaddr;
-        if (((y*800)+sx+36+ScreenAdjust+width)>(500*800)) return;
-        if ((m_screen+(y*800)+sx+ScreenAdjust+36)<m_screen) return;
         if (TeletextEnabled) y/=TeletextStyle;
-        vaddr=m_screen+ (y* 800) + sx+((TeletextEnabled)?36+ScreenAdjust:ScreenAdjust);
+        int d = (y*800)+sx+ScreenAdjust+(TeletextEnabled?36:0);
+        char *vaddr;
+        if ((d+width)>(500*800)) return;
+        if (d<0) return;
+        vaddr=m_screen+d;
         for (int n=0;n<width;n++) *(vaddr+n)^=Col;
     };
 
     void doUHorizLine(unsigned long Col, int y, int sx, int width) {
-        if (y>500) return;
         if (TeletextEnabled) y/=TeletextStyle;
-        memset(m_screen+ (y* 800) + sx, Col , width);
+        if (y>500) return;
+        memset(m_screen+ (y* 800) + sx, Col, width);
     };
 
-    BOOL        m_frozen;
-
-//  void doHorizLine(unsigned long Col, int offset, int width) {
-//      unsigned int tsx;
-//      if ((offset+width)<640*256) return;
-//      tsx=((offset/640)*640)+((offset % 640)/2);
-//      memset(m_screen+tsx,Col,width);
-//  };
-
-    void SetRomMenu(void);              // LRW  Added for individual ROM/Ram
-
     EightUChars *GetLinePtr(int y) {
-        if(y > 255) y=255;
-        return((EightUChars *)(m_screen + ( y * 800 )+ScreenAdjust));
+        int d = (y*800)+ScreenAdjust;
+        if (d > (MAX_VIDEO_SCAN_LINES*800))
+            return((EightUChars *)(m_screen+(MAX_VIDEO_SCAN_LINES*800)));
+        return((EightUChars *)(m_screen + d));
     }
 
     SixteenUChars *GetLinePtr16(int y) {
-        if(y > 255) y=255;
-        return((SixteenUChars *)(m_screen + ( y * 800 )+ScreenAdjust));
+        int d = (y*800)+ScreenAdjust;
+        if (d > (MAX_VIDEO_SCAN_LINES*800))
+            return((SixteenUChars *)(m_screen+(MAX_VIDEO_SCAN_LINES*800)));
+        return((SixteenUChars *)(m_screen + d));
     }
 
     char *imageData(void) {
@@ -143,6 +137,7 @@ class BeebWin  {
 
     int StartOfFrame(void);
     BOOL UpdateTiming(void);
+    void AdjustSpeed(bool up);
     void DisplayTiming(void);
     void ScaleJoystick(unsigned int x, unsigned int y);
     void SetMousestickButton(int button);
@@ -151,12 +146,23 @@ class BeebWin  {
     void SetAMXPosition(unsigned int x, unsigned int y);
     void Focus(BOOL);
     BOOL IsFrozen(void);
-  void ShowMenu(bool on);
-  void TrackPopupMenu(int x, int y);
-  bool IsFullScreen() { return m_isFullScreen; }
-  char*     m_screen;
-  double        m_RealTimeTarget;
+    void ShowMenu(bool on);
+    void TrackPopupMenu(int x, int y);
+    bool IsFullScreen() { return m_isFullScreen; }
+    void SaveOnExit(void);
+    void ResetTiming(void);
+    int TranslateKey(int, int, int&, int&);
+    void HandleCommandLine(char *cmd);
+    void NewTapeImage(char *FileName);
+    const char *GetAppPath(void) { return m_AppPath; }
 
+    unsigned char cols[9];
+    HMENU       m_hMenu;
+    BOOL        m_frozen;
+    char*       m_screen;
+    char*       m_screen_blur;
+    double      m_RealTimeTarget;
+    int         m_ShiftBooted;
 
   private:
     int         m_MenuIdWinSize;
@@ -175,6 +181,10 @@ class BeebWin  {
     BOOL        m_HideCursor;
     BOOL        m_FreezeWhenInactive;
     int         m_MenuIdKeyMapping;
+    int         m_KeyMapAS;
+    int         m_KeyMapFunc;
+    int         m_ShiftPressed;
+    int         m_vkeyPressed[256][2][2];
     char        m_AppPath[_MAX_PATH];
     BOOL        m_WriteProtectDisc[2];
     int         m_MenuIdAMXSize;
@@ -183,9 +193,9 @@ class BeebWin  {
     int         m_AMXYSize;
     int         m_AMXAdjust;
     BOOL        m_DirectDrawEnabled;
-  int     m_DDFullScreenMode;
-  bool    m_isFullScreen;
-  bool    m_isDD32;
+    int     m_DDFullScreenMode;
+    bool    m_isFullScreen;
+    bool    m_isDD32;
 
     HDC         m_hDC;
     HWND        m_hWnd;
@@ -202,6 +212,19 @@ class BeebWin  {
     int         m_MenuIdPrinterPort;
     char        m_PrinterFileName[_MAX_PATH];
     char        m_PrinterDevice[_MAX_PATH];
+
+    DWORD       m_LastTickCount;
+    DWORD       m_LastStatsTickCount;
+    int         m_LastTotalCycles;
+    int         m_LastStatsTotalCycles;
+    DWORD       m_TickBase;
+    int         m_CycleBase;
+    int         m_MinFrameCount;
+    DWORD       m_LastFPSCount;
+    int         m_LastStartY;
+    int         m_LastNLines;
+    int         m_MotionBlur;
+    char        m_BlurIntensities[8];
 
 
     // DirectX stuff
@@ -222,20 +245,19 @@ class BeebWin  {
     void CreateBeebWindow(void);
     void CreateBitmap(void);
     void InitMenu(void);
-  void UpdateMonitorMenu();
-  void UpdateSerialMenu(HMENU hMenu);
-  void UpdateSFXMenu();
+    void UpdateMonitorMenu();
+    void UpdateSerialMenu(HMENU hMenu);
+    void UpdateSFXMenu();
     void InitDirectX(void);
     HRESULT InitSurfaces(void);
     void ResetSurfaces(void);
     void GetRomMenu(void);              // LRW  Added for individual ROM/Ram
-    void GreyRomMenu(BOOL SetToGrey);   // LRW  Added for individual ROM/Ram
     void TranslateWindowSize(void);
     void TranslateSampleRate(void);
     void TranslateVolume(void);
     void TranslateTiming(void);
     void TranslateKeyMapping(void);
-    void ReadDisc(int Drive,HMENU dmenu);
+    int ReadDisc(int Drive,HMENU dmenu);
     void LoadTape(void);
     void InitJoystick(void);
     void ResetJoystick(void);
@@ -243,15 +265,17 @@ class BeebWin  {
     void SaveState(void);
     void NewDiscImage(int Drive);
     void ToggleWriteProtect(int Drive);
+    void LoadPreferences(void);
     void SavePreferences(void);
     void SetWindowAttributes(bool wasFullScreen);
     void TranslateAMX(void);
     BOOL PrinterFile(void);
     void TogglePrinter(void);
     void TranslatePrinterPort(void);
+    void SaveWindowPos(void);
 
 }; /* BeebWin */
 
 void SaveEmuUEF(FILE *SUEF);
-void LoadEmuUEF(FILE *SUEF);
+void LoadEmuUEF(FILE *SUEF,int Version);
 #endif

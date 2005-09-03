@@ -12,6 +12,10 @@
 #include "beebwin.h"
 #include "main.h"
 #include "beebsound.h"
+#include "disc8271.h"
+#include "disc1770.h"
+#include "tube.h"
+#include "serial.h"
 
 FILE *UEFState;
 
@@ -45,73 +49,100 @@ unsigned int fget16(FILE *fileptr) {
 
 void SaveUEFState(char *StateName) {
     UEFState=fopen(StateName,"wb");
-    fprintf(UEFState,"UEF File!");
-    fputc(0,UEFState); // UEF Header
-    fputc(8,UEFState); fputc(0,UEFState); // Version
-    SaveEmuUEF(UEFState);
-    Save6502UEF(UEFState);
-    SaveMemUEF(UEFState);
-    SaveVideoUEF(UEFState);
-    SaveVIAUEF(UEFState);
-    SaveSoundUEF(UEFState);
-    fclose(UEFState);
+    if (UEFState != NULL)
+    {
+        fprintf(UEFState,"UEF File!");
+        fputc(0,UEFState); // UEF Header
+        fputc(9,UEFState); fputc(0,UEFState); // Version
+        SaveEmuUEF(UEFState);
+        Save6502UEF(UEFState);
+        SaveMemUEF(UEFState);
+        SaveVideoUEF(UEFState);
+        SaveVIAUEF(UEFState);
+        SaveSoundUEF(UEFState);
+        if (MachineType!=3 && NativeFDC)
+            Save8271UEF(UEFState);
+        else
+            Save1770UEF(UEFState);
+        if (EnableTube) {
+            SaveTubeUEF(UEFState);
+            Save65C02UEF(UEFState);
+            Save65C02MemUEF(UEFState);
+        }
+        SaveSerialUEF(UEFState);
+        fclose(UEFState);
+    }
+    else
+    {
+        char errstr[256];
+        sprintf(errstr, "Failed to write state file: %s", StateName);
+        MessageBox(GETHWND,errstr,"BeebEm",MB_ICONERROR|MB_OK);
+    }
 }
 
 void LoadUEFState(char *StateName) {
     char errmsg[256];
     char UEFId[10];
     int CompletionBits=0; // These bits should be filled in
-    bool BeenReset=FALSE,Rescan=TRUE;;
     long RPos=0,FLength,CPos;
     unsigned int Block,Length;
-    int hv,lv;
-    bool Recognised;
+    int Version;
     strcpy(UEFId,"BlankFile");
     UEFState=fopen(StateName,"rb");
-    fseek(UEFState,NULL,SEEK_END);
-    FLength=ftell(UEFState);
-    fseek(UEFState,0,SEEK_SET);  // Get File length for eof comparison.
-    fread(UEFId,10,1,UEFState);
-    if (strcmp(UEFId,"UEF File!")!=0) {
-        MessageBox(GETHWND,"The file selected is not a UEF File.","BeebEm",MB_ICONERROR|MB_OK);
-        return;
-    }
-    hv=fgetc(UEFState);
-    lv=fgetc(UEFState); // Version
-    sprintf(errmsg,"UEF Version %d.%d",hv,lv);
-    //MessageBox(GETHWND,errmsg,"BeebEm",MB_OK);
-    RPos=ftell(UEFState);
-    Rescan=TRUE;
-    //while (Rescan) {
+    if (UEFState != NULL)
+    {
+        fseek(UEFState,NULL,SEEK_END);
+        FLength=ftell(UEFState);
+        fseek(UEFState,0,SEEK_SET);  // Get File length for eof comparison.
+        fread(UEFId,10,1,UEFState);
+        if (strcmp(UEFId,"UEF File!")!=0) {
+            MessageBox(GETHWND,"The file selected is not a UEF File.","BeebEm",MB_ICONERROR|MB_OK);
+            fclose(UEFState);
+            return;
+        }
+        Version=fget16(UEFState);
+        sprintf(errmsg,"UEF Version %x",Version);
+        //MessageBox(GETHWND,errmsg,"BeebEm",MB_OK);
+        RPos=ftell(UEFState);
+
         while (ftell(UEFState)<FLength) {
             Block=fget16(UEFState);
             Length=fget32(UEFState);
             CPos=ftell(UEFState);
-            Recognised=FALSE;
             sprintf(errmsg,"Block %04X - Length %d (%04X)",Block,Length,Length);
             //MessageBox(GETHWND,errmsg,"BeebEm",MB_ICONERROR|MB_OK);
-            if (Block==0x046A) {
-                //BeenReset=TRUE;
-                LoadEmuUEF(UEFState);
-                Recognised=TRUE;
-                //fseek(UEFState,RPos,SEEK_SET);
-            }
-            if (BeenReset) Rescan=FALSE; // Don't rescan
-            if (Block==0x0460) { Load6502UEF(UEFState); Recognised=TRUE; }
-            if (Block==0x0461) { LoadRomRegsUEF(UEFState); Recognised=TRUE; }
-            if (Block==0x0462) { LoadMainMemUEF(UEFState); Recognised=TRUE; }
-            if (Block==0x0463) { LoadShadMemUEF(UEFState); Recognised=TRUE; }
-            if (Block==0x0464) { LoadPrivMemUEF(UEFState); Recognised=TRUE; }
-            if (Block==0x0465) { LoadFileMemUEF(UEFState); Recognised=TRUE; }
-            if (Block==0x0466) { LoadSWRMMemUEF(UEFState); Recognised=TRUE; }
-            if (Block==0x0467) { LoadViaUEF(UEFState); Recognised=TRUE; }
-            if (Block==0x0468) { LoadVideoUEF(UEFState); Recognised=TRUE; }
-            if (Block==0x046B) { LoadSoundUEF(UEFState); Recognised=TRUE; }
+            if (Block==0x046A) LoadEmuUEF(UEFState,Version);
+            if (Block==0x0460) Load6502UEF(UEFState);
+            if (Block==0x0461) LoadRomRegsUEF(UEFState);
+            if (Block==0x0462) LoadMainMemUEF(UEFState);
+            if (Block==0x0463) LoadShadMemUEF(UEFState);
+            if (Block==0x0464) LoadPrivMemUEF(UEFState);
+            if (Block==0x0465) LoadFileMemUEF(UEFState);
+            if (Block==0x0466) LoadSWRMMemUEF(UEFState);
+            if (Block==0x0467) LoadViaUEF(UEFState);
+            if (Block==0x0468) LoadVideoUEF(UEFState);
+            if (Block==0x046B) LoadSoundUEF(UEFState);
+            if (Block==0x046D) LoadIntegraBHiddenMemUEF(UEFState);
+            if (Block==0x046E) Load8271UEF(UEFState);
+            if (Block==0x046F) Load1770UEF(UEFState);
+            if (Block==0x0470) LoadTubeUEF(UEFState);
+            if (Block==0x0471) Load65C02UEF(UEFState);
+            if (Block==0x0472) Load65C02MemUEF(UEFState);
+            if (Block==0x0473) LoadSerialUEF(UEFState);
             fseek(UEFState,CPos+Length,SEEK_SET); // Skip unrecognised blocks (and over any gaps)
         }
-        // if (!BeenReset) mainWin->ResetBeebSystem(0,0,1);
-    //}
-    fclose(UEFState);
+
+        fclose(UEFState);
+
+        mainWin->SetRomMenu();
+        mainWin->SetDiscWriteProtects();
+    }
+    else
+    {
+        char errstr[256];
+        sprintf(errstr, "Cannot open state file: %s", StateName);
+        MessageBox(GETHWND,errstr,"BeebEm",MB_ICONERROR|MB_OK);
+    }
 }
 
 

@@ -48,6 +48,9 @@ void Disc8271_poll_real(void);
 /*--------------------------------------------------------------------------*/
 void Disc8271_reset(void);
 
+void Save8271UEF(FILE *SUEF);
+void Load8271UEF(FILE *SUEF);
+
 /*--------------------------------------------------------------------------*/
 void disc8271_dumpstate(void);
 #endif

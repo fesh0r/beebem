@@ -28,8 +28,6 @@
 
 
 void VIAReset(VIAState *ToReset);
-void SaveVIAState(VIAState *VIAData, unsigned char *StateData);
-void RestoreVIAState(VIAState *VIAData, unsigned char *StateData);
 void SaveVIAUEF(FILE *SUEF);
 void LoadViaUEF(FILE *SUEF);
 void via_dumpstate(VIAState *ToDump);

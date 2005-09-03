@@ -35,8 +35,8 @@
 
 #include <stdio.h>
 
-extern int SoundDefault; // Default sound state
-extern int SoundEnabled;    /* Sound on/off flag */
+extern int SoundDefault; // Default sound state (enabled/disabled via sound menu)
+extern int SoundEnabled;    /* Sound on/off flag - will be off if DirectSound init fails */
 extern int DirectSoundEnabled;  /* DirectSound enabled for Win32 */
 extern int RelaySoundEnabled; // Relay Click noise enable
 extern int SoundSampleRate; /* Sample rate, 11025, 22050 or 44100 Hz */
@@ -74,6 +74,7 @@ struct AudioType {
 
 extern struct AudioType TapeAudio;
 extern bool TapeSoundEnabled;
+extern int SoundChipEnabled;
 void SoundChipReset(void);
 void SwitchOnSound(void);
 extern int UseHostClock;
