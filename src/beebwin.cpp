@@ -46,6 +46,7 @@
 #include "ide.h"
 #include "mem_mmu.h"
 #include "simz80.h"
+#include "avi.h"
 
 // some LED based macros
 
@@ -69,6 +70,8 @@ bool MenuOn;
 
 struct LEDType LEDs;
 char DiscLedColour=0; // 0 for red, 1 for green.
+
+AVIWriter *aviWriter = NULL;
 
 // FDC Board extension DLL variables
 HMODULE hFDCBoard;
@@ -94,7 +97,7 @@ char FDCDLL[256];
 static const char *WindowTitle = "BeebEm - BBC Model B / Master 128 Emulator";
 static const char *AboutText = "BeebEm - Emulating:\n\nBBC Micro Model B\nBBC Micro Model B + IntegraB\n"
                                 "BBC Micro Model B Plus (128)\nAcorn Master 128\nAcorn 65C02 Second Processor\nTorch Z80 Second Processor\n\n"
-                                "Version 2.3, September 2005";
+                                "Version 3.0, November 2005";
 
 /* Configuration file strings */
 static const char *CFG_FILE_NAME = "BeebEm.ini";
@@ -240,6 +243,8 @@ void BeebWin::Initialise()
 
     IgnoreIllegalInstructions = 1;
 
+    aviWriter = NULL;
+
     m_WriteProtectDisc[0] = !IsDiscWritable(0);
     m_WriteProtectDisc[1] = !IsDiscWritable(1);
     UEFTapeName[0]=0;
@@ -250,6 +255,9 @@ void BeebWin::Initialise()
     m_RelativeSpeed = 1;
     m_FramesPerSecond = 50;
     strcpy(m_szTitle, WindowTitle);
+
+    m_AviDC = NULL;
+    m_AviDIB = NULL;
 
     for(int i=0;i<12;i++)
         cols[i] = i;
@@ -302,6 +310,9 @@ void BeebWin::Initialise()
 /****************************************************************************/
 BeebWin::~BeebWin()
 {
+    if (aviWriter)
+        delete aviWriter;
+
     if (m_DirectDrawEnabled)
     {
         ResetSurfaces();
@@ -325,11 +336,10 @@ BeebWin::~BeebWin()
 /****************************************************************************/
 void BeebWin::SaveWindowPos(void)
 {
-    WINDOWPLACEMENT tWindowPlacement;
-    tWindowPlacement.length=sizeof(tWindowPlacement);
-    GetWindowPlacement(GETHWND,&tWindowPlacement);
-    *binsize=sizeof(tWindowPlacement);
-    SysReg.SetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,"WindowPos",&tWindowPlacement,binsize);
+    RECT r;
+    GetWindowRect(GETHWND,&r);
+    *binsize=sizeof(r);
+    SysReg.SetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,"WindowPos2",&r,binsize);
 }
 /****************************************************************************/
 void BeebWin::ResetBeebSystem(unsigned char NewModelType,unsigned char TubeStatus,unsigned char LoadRoms)
@@ -397,6 +407,8 @@ void BeebWin::CreateBitmap()
     m_bmi.bmiHeader.biHeight = -512;
     m_bmi.bmiHeader.biPlanes = 1;
     m_bmi.bmiHeader.biBitCount = 8;
+    m_bmi.bmiHeader.biXPelsPerMeter = 0;
+    m_bmi.bmiHeader.biYPelsPerMeter = 0;
     m_bmi.bmiHeader.biCompression = BI_RGB;
     m_bmi.bmiHeader.biSizeImage = 800*512;
     m_bmi.bmiHeader.biClrUsed = 68;
@@ -566,6 +578,8 @@ void BeebWin::InitMenu(void)
     char menu_string[256];
     HMENU hMenu = m_hMenu;
 
+    CheckMenuItem(hMenu, m_MenuIdAviResolution, MF_CHECKED);
+    CheckMenuItem(hMenu, m_MenuIdAviSkip, MF_CHECKED);
     CheckMenuItem(hMenu, IDM_SPEEDANDFPS, m_ShowSpeedAndFPS ? MF_CHECKED : MF_UNCHECKED);
     CheckMenuItem(hMenu, m_MenuIdWinSize, MF_CHECKED);
     CheckMenuItem(hMenu, IDM_FULLSCREEN, m_isFullScreen ? MF_CHECKED : MF_UNCHECKED);
@@ -1309,7 +1323,7 @@ void BeebWin::updateLines(HDC hDC, int starty, int nlines)
             j = 32;
         else if (m_MotionBlur == IDM_BLUR_4)
             j = 16;
-        else // blue 8 frames
+        else // blur 8 frames
             j = 8;
 
         for (i = 0; i < 800*512; ++i)
@@ -1433,6 +1447,27 @@ void BeebWin::updateLines(HDC hDC, int starty, int nlines)
             char  errstr[200];
             sprintf(errstr,"DirectX failure while updating screen\nFailure code %X",ddrval);
             MessageBox(m_hWnd,errstr,WindowTitle,MB_OK|MB_ICONERROR);
+        }
+    }
+
+    if (aviWriter)
+    {
+        m_AviFrameSkipCount++;
+        if (m_AviFrameSkipCount > m_AviFrameSkip)
+        {
+            m_AviFrameSkipCount = 0;
+
+            StretchBlt(m_AviDC, 0, 0, m_Avibmi.bmiHeader.biWidth, m_Avibmi.bmiHeader.biHeight,
+                m_hDCBitmap, 0, starty, (TeletextEnabled)?552:ActualScreenWidth, (TeletextEnabled==1)?TTLines:nlines, SRCCOPY);
+
+            HRESULT hr = aviWriter->WriteVideo((BYTE*)m_AviScreen);
+            if (hr != E_UNEXPECTED && FAILED(hr))
+            {
+                MessageBox(m_hWnd, "Failed to write video to AVI file",
+                    WindowTitle, MB_OK|MB_ICONERROR);
+                delete aviWriter;
+                aviWriter = NULL;
+            }
         }
     }
 }
@@ -2487,7 +2522,7 @@ void BeebWin::LoadPreferences()
     char keyData[256];
     int key;
     int row, col;
-    WINDOWPLACEMENT tWindowPlacement;
+    RECT rect;
 
     *binsize=1;
 
@@ -2860,18 +2895,30 @@ void BeebWin::LoadPreferences()
         SBSize=0;
     }
 
-
-    *binsize=sizeof(tWindowPlacement);
-    RegRes=SysReg.GetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,"WindowPos",&tWindowPlacement,binsize);
+    *binsize=sizeof(rect);
+    RegRes=SysReg.GetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,"WindowPos2",&rect,binsize);
     if (RegRes)
     {
-        m_XWinPos = tWindowPlacement.rcNormalPosition.left;
-        m_YWinPos = tWindowPlacement.rcNormalPosition.top;
+        m_XWinPos = rect.left;
+        m_YWinPos = rect.top;
     }
     else
     {
         m_XWinPos = -1;
         m_YWinPos = -1;
+    }
+
+    if (SysReg.GetDWORDValue(HKEY_CURRENT_USER,CFG_REG_KEY,"CaptureResolution",dword)) {
+        m_MenuIdAviResolution = dword;
+    }
+    else {
+        m_MenuIdAviResolution = IDM_VIDEORES2;
+    }
+    if (SysReg.GetDWORDValue(HKEY_CURRENT_USER,CFG_REG_KEY,"FrameSkip",dword)) {
+        m_MenuIdAviSkip = dword;
+    }
+    else {
+        m_MenuIdAviSkip = IDM_VIDEOSKIP1;
     }
 
     // Create all the reg keys
@@ -2974,6 +3021,9 @@ void BeebWin::SavePreferences()
     SysReg.SetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,"Basic Hardware",&BHardware,binsize);
     SysReg.SetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,"Teletext Half Mode",&THalfMode,binsize);
     SysReg.SetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,"SoundBlockSize",&SBSize,binsize);
+
+    SysReg.SetDWORDValue(HKEY_CURRENT_USER,CFG_REG_KEY,"CaptureResolution",m_MenuIdAviResolution);
+    SysReg.SetDWORDValue(HKEY_CURRENT_USER,CFG_REG_KEY,"FrameSkip",m_MenuIdAviSkip);
 }
 
 void BeebWin::SaveOnExit(void)
@@ -3405,13 +3455,6 @@ void BeebWin::HandleCommand(int MenuId)
         break;
 
     case IDM_FULLSCREEN:
-        WINDOWPLACEMENT tWindowPlacement;
-        if (!m_isFullScreen)
-        {
-            tWindowPlacement.length=*binsize;
-            GetWindowPlacement(GETHWND,&tWindowPlacement);
-            SysReg.SetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,"WindowPos",&tWindowPlacement,binsize);
-        }
         m_isFullScreen = !m_isFullScreen;
         CheckMenuItem(hMenu, IDM_FULLSCREEN, m_isFullScreen ? MF_CHECKED : MF_UNCHECKED);
         TranslateWindowSize();
@@ -3753,6 +3796,7 @@ void BeebWin::HandleCommand(int MenuId)
         break;
     case ID_MONITOR_AMBER:
         palette_type = AMBER;
+        CreateBitmap();
         break;
 
     case IDM_TUBE:
@@ -3949,7 +3993,42 @@ void BeebWin::HandleCommand(int MenuId)
             CheckMenuItem(hMenu, m_MotionBlur, MF_CHECKED);
         }
         break;
+
+    case IDM_VIDEORES1:
+    case IDM_VIDEORES2:
+    case IDM_VIDEORES3:
+        if (MenuId != m_MenuIdAviResolution)
+        {
+            CheckMenuItem(hMenu, m_MenuIdAviResolution, MF_UNCHECKED);
+            m_MenuIdAviResolution = MenuId;
+            CheckMenuItem(hMenu, m_MenuIdAviResolution, MF_CHECKED);
+        }
+        break;
+    case IDM_VIDEOSKIP0:
+    case IDM_VIDEOSKIP1:
+    case IDM_VIDEOSKIP2:
+    case IDM_VIDEOSKIP3:
+    case IDM_VIDEOSKIP4:
+    case IDM_VIDEOSKIP5:
+        if (MenuId != m_MenuIdAviSkip)
+        {
+            CheckMenuItem(hMenu, m_MenuIdAviSkip, MF_UNCHECKED);
+            m_MenuIdAviSkip = MenuId;
+            CheckMenuItem(hMenu, m_MenuIdAviSkip, MF_CHECKED);
+        }
+        break;
+    case IDM_CAPTUREVIDEO:
+        CaptureVideo();
+        break;
+    case IDM_ENDVIDEO:
+        if (aviWriter != NULL)
+        {
+            delete aviWriter;
+            aviWriter = NULL;
+        }
+        break;
     }
+
     SetSound(UNMUTED);
     if (palette_type != prev_palette_type)
     {
@@ -4027,15 +4106,56 @@ void BeebWin::HandleCommandLine(char *cmd)
     bool cont = false;
     char TmpPath[256];
     char *FileName = cmd;
+    bool uef = false;
 
     // See if disc image is readable
-    if (strlen(FileName) > 0)
+    if (__argc > 1)
     {
+        FileName = __argv[1];
+
+        // Work out which type of files it is
+        char *ext = strrchr(FileName, '.');
+        if (ext != NULL)
+        {
+            cont = true;
+            if (stricmp(ext+1, "ssd") == 0)
+                ssd = true;
+            else if (stricmp(ext+1, "dsd") == 0)
+                dsd = true;
+            else if (stricmp(ext+1, "adl") == 0)
+                adfs = true;
+            else if (stricmp(ext+1, "adf") == 0)
+                adfs = true;
+            else if (stricmp(ext+1, "uef") == 0)
+                uef = true;
+            else
+                cont = false;
+        }
+    }
+
+    if (cont)
+    {
+        cont = false;
+
         FILE *fd = fopen(FileName, "rb");
         if (fd != NULL)
         {
             cont = true;
             fclose(fd);
+        }
+        else if (uef)
+        {
+            // Try getting it from BeebState directory
+            strcpy(TmpPath, m_AppPath);
+            strcat(TmpPath, "beebstate/");
+            strcat(TmpPath, FileName);
+            FILE *fd = fopen(TmpPath, "rb");
+            if (fd != NULL)
+            {
+                cont = true;
+                FileName = TmpPath;
+                fclose(fd);
+            }
         }
         else
         {
@@ -4055,20 +4175,10 @@ void BeebWin::HandleCommandLine(char *cmd)
 
     if (cont)
     {
-        // Work out which type of disc it is
-        char *ext = strrchr(FileName, '.');
-        if (ext != NULL)
+        if (uef)
         {
-            if (stricmp(ext+1, "ssd") == 0)
-                ssd = true;
-            else if (stricmp(ext+1, "dsd") == 0)
-                dsd = true;
-            else if (stricmp(ext+1, "adl") == 0)
-                adfs = true;
-            else if (stricmp(ext+1, "adf") == 0)
-                adfs = true;
-            else
-                cont = false;
+            LoadUEFState(FileName);
+            cont = false;
         }
     }
 
@@ -4205,4 +4315,134 @@ unsigned char BeebWin::GetDriveControl(void) {
     temp=ReadFDCControlReg();
     temp2=PGetDriveControl(temp);
     return(temp2);
+}
+
+/****************************************************************************/
+void BeebWin::CaptureVideo()
+{
+    char StartPath[_MAX_PATH];
+    char FileName[256];
+    OPENFILENAME ofn;
+    BOOL changed;
+
+    strcpy(StartPath, m_AppPath);
+    FileName[0] = '\0';
+
+    ofn.lStructSize = sizeof(OPENFILENAME);
+    ofn.hwndOwner = m_hWnd;
+    ofn.hInstance = NULL;
+    ofn.lpstrFilter = "AVI File (*.avi)\0*.avi\0";
+    ofn.lpstrCustomFilter = NULL;
+    ofn.nMaxCustFilter = 0;
+    ofn.nFilterIndex = 0;
+    ofn.lpstrFile = FileName;
+    ofn.nMaxFile = sizeof(FileName);
+    ofn.lpstrFileTitle = NULL;
+    ofn.nMaxFileTitle = 0;
+    ofn.lpstrInitialDir = StartPath;
+    ofn.lpstrTitle = NULL;
+    ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_HIDEREADONLY;
+    ofn.nFileOffset = 0;
+    ofn.nFileExtension = 0;
+    ofn.lpstrDefExt = NULL;
+    ofn.lCustData = 0;
+    ofn.lpfnHook = NULL;
+    ofn.lpTemplateName = NULL;
+
+    changed = GetSaveFileName(&ofn);
+    if (changed)
+    {
+        // Add avi extension
+        if (strlen(FileName) < 5 ||
+            ((strcmp(FileName + (strlen(FileName)-4), ".AVI")!=0) &&
+             (strcmp(FileName + (strlen(FileName)-4), ".avi")!=0)) )
+        {
+            strcat(FileName,".avi");
+        }
+
+        // Close AVI file if currently capturing
+        if (aviWriter != NULL)
+        {
+            delete aviWriter;
+            aviWriter = NULL;
+        }
+
+        aviWriter = new AVIWriter();
+
+        WAVEFORMATEX wf, *wfp;
+        if (SoundEnabled)
+        {
+            memset(&wf, 0, sizeof(WAVEFORMATEX));
+            wf.wFormatTag = WAVE_FORMAT_PCM;
+            wf.nChannels = 1;
+            wf.nSamplesPerSec = SoundSampleRate;
+            wf.wBitsPerSample = 8;
+            wf.nBlockAlign = 1;
+            wf.nAvgBytesPerSec = SoundSampleRate;
+            wf.cbSize = 0;
+            wfp = &wf;
+        }
+        else
+        {
+            wfp = NULL;
+        }
+
+        // Create DIB for AVI frames
+        if (m_AviDIB != NULL)
+            DeleteObject(m_AviDIB);
+        if (m_AviDC != NULL)
+            DeleteDC(m_AviDC);
+        m_Avibmi = m_bmi;
+        if (m_MenuIdAviResolution == IDM_VIDEORES1)
+        {
+            m_Avibmi.bmiHeader.biWidth = m_XWinSize;
+            m_Avibmi.bmiHeader.biHeight = m_YWinSize;
+        }
+        else if (m_MenuIdAviResolution == IDM_VIDEORES2)
+        {
+            m_Avibmi.bmiHeader.biWidth = 640;
+            m_Avibmi.bmiHeader.biHeight = 512;
+        }
+        else
+        {
+            m_Avibmi.bmiHeader.biWidth = 320;
+            m_Avibmi.bmiHeader.biHeight = 256;
+        }
+        m_Avibmi.bmiHeader.biSizeImage = m_Avibmi.bmiHeader.biWidth*m_Avibmi.bmiHeader.biHeight;
+        m_AviDC = CreateCompatibleDC(NULL);
+        m_AviDIB = CreateDIBSection(m_AviDC, (BITMAPINFO *)&m_Avibmi,
+                                    DIB_RGB_COLORS, (void**)&m_AviScreen, NULL, 0);
+        if (SelectObject(m_AviDC, m_AviDIB) == NULL)
+        {
+            MessageBox(m_hWnd, "Failed to initialise AVI buffers",
+                WindowTitle, MB_OK|MB_ICONERROR);
+            delete aviWriter;
+            aviWriter = NULL;
+        }
+        else
+        {
+            // Calc frame rate based on users frame skip selection
+            switch (m_MenuIdAviSkip)
+            {
+            case IDM_VIDEOSKIP0: m_AviFrameSkip = 0; break;
+            case IDM_VIDEOSKIP1: m_AviFrameSkip = 1; break;
+            case IDM_VIDEOSKIP2: m_AviFrameSkip = 2; break;
+            case IDM_VIDEOSKIP3: m_AviFrameSkip = 3; break;
+            case IDM_VIDEOSKIP4: m_AviFrameSkip = 4; break;
+            case IDM_VIDEOSKIP5: m_AviFrameSkip = 5; break;
+            default: m_AviFrameSkip = 1; break;
+            }
+            m_AviFrameSkipCount = 0;
+
+            HRESULT hr = aviWriter->Initialise(FileName, wfp, &m_Avibmi,
+                            (m_FramesPerSecond > 46 ? 50 : m_FramesPerSecond) / (m_AviFrameSkip+1), m_hWnd);
+            if (FAILED(hr))
+            {
+                MessageBox(m_hWnd, "Failed to create AVI file",
+                    WindowTitle, MB_OK|MB_ICONERROR);
+                delete aviWriter;
+                aviWriter = NULL;
+            }
+        }
+    }
 }
