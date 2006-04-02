@@ -26,8 +26,9 @@ char *perl_params =
     "dfd_inline=1,"
     "ed_inline=1";
 
-#include "mem_mmu.h"
-#include "simz80.h"
+#include "main.h"
+#include "z80mem.h"
+#include "z80.h"
 
 /* Z80 registers */
 WORD af[2];         /* accumulator and flags (2 banks) */
@@ -41,7 +42,8 @@ WORD ix;
 WORD iy;
 WORD sp;
 WORD pc;
-WORD IFF;
+WORD IFF1;
+WORD IFF2;
 
 static const unsigned char partab[256] = {
     4,0,0,4,0,4,4,0,0,4,4,0,4,0,0,4,
@@ -2007,7 +2009,7 @@ simz80(FASTREG PC)
                 2 | (temp != 0);
             break;
         case 0x45:          /* RETN */
-            IFF |= IFF >> 1;
+            IFF1 = IFF2;
             POP(PC);
             break;
         case 0x46:          /* IM 0 */
@@ -2043,7 +2045,7 @@ simz80(FASTREG PC)
             PC += 2;
             break;
         case 0x4D:          /* RETI */
-            IFF |= IFF >> 1;
+//          IFF1 = IFF2;
             POP(PC);
             break;
         case 0x4F:          /* LD R,A */
@@ -2079,7 +2081,7 @@ simz80(FASTREG PC)
             /* interrupt mode 1 */
             break;
         case 0x57:          /* LD A,I */
-            AF = (AF & 0x29) | (ir & ~255) | ((ir >> 8) & 0x80) | (((ir & ~255) == 0) << 6) | ((IFF & 2) << 1);
+            AF = (AF & 0x29) | (ir & ~255) | ((ir >> 8) & 0x80) | (((ir & ~255) == 0) << 6) | ((IFF2) << 2);
             break;
         case 0x58:          /* IN E,(C) */
             temp = Input(lreg(BC));
@@ -2111,7 +2113,7 @@ simz80(FASTREG PC)
             /* interrupt mode 2 */
             break;
         case 0x5F:          /* LD A,R */
-            AF = (AF & 0x29) | ((ir & 255) << 8) | (ir & 0x80) | (((ir & 255) == 0) << 6) | ((IFF & 2) << 1);
+            AF = (AF & 0x29) | ((ir & 255) << 8) | (ir & 0x80) | (((ir & 255) == 0) << 6) | ((IFF2) << 2);
             ir = (ir + 1) & 255;
             break;
         case 0x60:          /* IN H,(C) */
@@ -2254,13 +2256,14 @@ simz80(FASTREG PC)
         case 0xA2:          /* INI */
             PutBYTE(HL, Input(lreg(BC))); ++HL;
             SETFLAG(N, 1);
-            SETFLAG(P, (--BC & 0xffff) != 0);
+            Sethreg(BC, hreg(BC) - 1);
+            SETFLAG(Z, hreg(BC) == 0);
             break;
         case 0xA3:          /* OUTI */
             Output(lreg(BC), GetBYTE(HL)); ++HL;
             SETFLAG(N, 1);
-            Sethreg(BC, lreg(BC) - 1);
-            SETFLAG(Z, lreg(BC) == 0);
+            Sethreg(BC, hreg(BC) - 1);
+            SETFLAG(Z, hreg(BC) == 0);
             break;
         case 0xA8:          /* LDD */
             acu = GetBYTE_mm(HL);
@@ -2400,7 +2403,8 @@ simz80(FASTREG PC)
         JPC(!TSTFLAG(S));
         break;
     case 0xF3:          /* DI */
-        IFF = 0;
+        IFF1 = 0;
+        IFF2 = 0;
         break;
     case 0xF4:          /* CALL P,nnnn */
         CALLC(!TSTFLAG(S));
@@ -2425,7 +2429,8 @@ simz80(FASTREG PC)
         JPC(TSTFLAG(S));
         break;
     case 0xFB:          /* EI */
-        IFF = 3;
+        IFF1 = 1;
+        IFF2 = 1;
         break;
     case 0xFC:          /* CALL M,nnnn */
         CALLC(TSTFLAG(S));
@@ -2991,4 +2996,69 @@ simz80(FASTREG PC)
 /* make registers visible for debugging if interrupted */
     SAVE_STATE();
     return (PC&0xffff)|0x10000; /* flag non-bios stop */
+}
+
+extern int inROM;
+
+void z80_NMI_Interrupt(void)
+{
+    FASTREG SP = sp;
+
+    PUSH(pc);
+    pc = 0x0066;
+    sp = SP;
+    inROM = 1;
+}
+
+void z80_IRQ_Interrupt(void)
+{
+    FASTREG SP = sp;
+
+    PUSH(pc);
+    pc = GetWORD(0xfffe);       // Interrupt vector
+    sp = SP;
+}
+
+void set_Z80_irq_line(int state)
+{
+static int irq_state = 0;
+
+    if (irq_state != state)
+    {
+
+        /* if the IF is set, signal an interrupt */
+        if (state == 1)
+        {
+            if (IFF1)
+            {
+                IFF1 = 0;
+                irq_state = state;
+                z80_IRQ_Interrupt();
+            }
+        }
+        else
+        {
+            irq_state = 0;
+        }
+    }
+}
+
+void set_Z80_nmi_line(int state)
+{
+static int irq_state = 0;
+
+    if (irq_state != state)
+    {
+
+        if (state == 1)
+        {
+            irq_state = state;
+            z80_NMI_Interrupt();
+        }
+        else
+        {
+            irq_state = 0;
+        }
+    }
+
 }

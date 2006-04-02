@@ -19,9 +19,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA. */
 
 #include <limits.h>
 
-unsigned char ReadZ80Mem(int pc);
-void WriteZ80Mem(int pc, unsigned char data);
-
 #if UCHAR_MAX == 255
 typedef unsigned char   BYTE;
 #else

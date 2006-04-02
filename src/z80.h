@@ -21,6 +21,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA. */
 
 /* SEE limits and BYTE-, WORD- and FASTREG - defintions im MEM_MMU.h */
 
+typedef unsigned short WORD;
+
 /* two sets of accumulator / flags */
 extern WORD af[2];
 extern int af_sel;
@@ -41,6 +43,10 @@ extern WORD pc;
 extern WORD IFF;
 
 /* see definitions for memory in mem_mmu.h */
+
+#ifdef DEBUG
+extern volatile int stopsim;
+#endif
 
 extern FASTWORK simz80(FASTREG PC);
 
@@ -77,19 +83,21 @@ extern void out(unsigned int, unsigned char);
 #define Output(port, value)
 #endif
 
+
 void z80_execute();
 void init_z80();
 void Debug_Z80();
 int Z80_Disassemble(int adr, char *s);
-void load_ccpn();
 void PrintHex(int PC);
-
-extern int Enable_Z80;
-extern int trace_z80;
-extern int debug_z80;
-extern int inROM;
 extern int TorchTube;
+extern int Enable_Z80;
+unsigned char ReadZ80Mem(int pc);
+void WriteZ80Mem(int pc, unsigned char data);
+void Disp_RegSet1(char *str);
+void Disp_RegSet2(char *str);
 
-extern unsigned char z80_rom[65536L];
-extern unsigned char z80_ram[65536L];
+void z80_NMI_Interrupt(void);
+void z80_IRQ_Interrupt(void);
+void set_Z80_irq_line(int state);
+void set_Z80_nmi_line(int state);
 
