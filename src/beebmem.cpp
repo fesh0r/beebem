@@ -20,6 +20,11 @@
 /****************************************************************************/
 /* Beebemulator - memory subsystem - David Alan Gilbert 16/10/94 */
 // Econet emulation: Rob O'Donnell robert@irrelevant.com 28/12/2004
+
+#ifdef WIN32
+#include <windows.h>
+#endif
+
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -212,6 +217,7 @@ char *BeebMemPtrWithWrapMo7(int a, int n) {
 
 /*----------------------------------------------------------------------------*/
 int BeebReadMem(int Address) {
+    int Value = 0xff;
 
 // BBC B Start
   if (MachineType==0) {
@@ -303,7 +309,10 @@ int BeebReadMem(int Address) {
             return(WholeRam[Address]);
             break;
         case 0xf:
-            if (Address<0xfc00 || Address>=0xff00) { return(WholeRam[Address]); break; }
+            if (Address<0xfc00 || Address>=0xff00) { return(WholeRam[Address]); }
+            if ((ACCCON & 0x40) && Address>=0xfc00 && Address<0xff00) {
+                return WholeRam[Address];
+            }
             break;
         default:
             return(0);
@@ -316,37 +325,51 @@ int BeebReadMem(int Address) {
 
     /* IO space */
 
-    if (Address >= 0xfc00 && Address < 0xfe00)
+    if (Address >= 0xfc00 && Address < 0xfe00) {
+        SyncIO();
         AdjustForIORead();
+    }
 
     /* VIA's first - games seem to do really heavy reaing of these */
     /* Can read from a via using either of the two 16 bytes blocks */
     if ((Address & ~0xf)==0xfe40 || (Address & ~0xf)==0xfe50) {
+        SyncIO();
+        Value = SysVIARead(Address & 0xf);
         AdjustForIORead();
-        return(SysVIARead(Address & 0xf));
+        return Value;
     }
 
     if ((Address & ~0xf)==0xfe60 || (Address & ~0xf)==0xfe70) {
+        SyncIO();
+        Value = UserVIARead(Address & 0xf);
         AdjustForIORead();
-        return(UserVIARead(Address & 0xf));
+        return Value;
     }
 
     if ((Address & ~7)==0xfe00) {
+        SyncIO();
+        Value = CRTCRead(Address & 0x7);
         AdjustForIORead();
-        return(CRTCRead(Address & 0x7));
+        return Value;
     }
 
     if (Address==0xfe08) {
+        SyncIO();
+        Value = Read_ACIA_Status();
         AdjustForIORead();
-        return(Read_ACIA_Status());
+        return Value;
     }
     if (Address==0xfe09) {
+        SyncIO();
+        Value = Read_ACIA_Rx_Data();
         AdjustForIORead();
-        return(Read_ACIA_Rx_Data());
+        return Value;
     }
     if (Address==0xfe10) {
+        SyncIO();
+        Value = Read_SERPROC();
         AdjustForIORead();
-        return(Read_SERPROC());
+        return Value;
     }
 
     /* Rob: BBC AUG says FE20 is econet stn no. for bbc b. [It's in cmos for a master,]
@@ -418,8 +441,10 @@ int BeebReadMem(int Address) {
     }
 
     if ((Address & ~0x1f)==0xfec0 && MachineType!=3) {
+        SyncIO();
+        Value = AtoDRead(Address & 0xf);
         AdjustForIORead();
-        return(AtoDRead(Address & 0xf));
+        return Value;
     }
 
     if ((Address & ~0x1f)==0xfee0)
@@ -430,12 +455,12 @@ int BeebReadMem(int Address) {
             return(ReadTubeFromHostSide(Address&7)); //Read From Tube
     }
 
-    if ((Address & ~0x3)==0xfc40) {
-        return(SCSIRead(Address & 0x3));
-    }
-
     if ((Address & ~0x3)==0xfc10) {
         return(TeleTextRead(Address & 0x3));
+    }
+
+    if ((Address & ~0x3)==0xfc40) {
+        return(SCSIRead(Address & 0x3));
     }
 
     if ((Address & ~0x3)==0xfdf0) {
@@ -474,7 +499,7 @@ static void DoRomChange(int NewBank) {
 static void FiddleACCCON(unsigned char newValue) {
     // Master specific, should only execute in Master128 mode
     // ignore bits TST (6) IFJ (5) and ITU (4)
-    newValue&=143;
+    //newValue&=143;
     unsigned char oldshd;
     if ((newValue & 128)==128) DoInterrupt();
     ACCCON=newValue & 127; // mask out the IRR bit so that interrupts dont occur repeatedly
@@ -697,11 +722,14 @@ void BeebWriteMem(int Address, int Value) {
 
     /* IO space */
 
-    if (Address >= 0xfc00 && Address < 0xfe00)
+    if (Address >= 0xfc00 && Address < 0xfe00) {
+        SyncIO();
         AdjustForIOWrite();
+    }
 
     /* Can write to a via using either of the two 16 bytes blocks */
     if ((Address & ~0xf)==0xfe40 || (Address & ~0xf)==0xfe50) {
+        SyncIO();
         AdjustForIOWrite();
         SysVIAWrite((Address & 0xf),Value);
         return;
@@ -709,28 +737,33 @@ void BeebWriteMem(int Address, int Value) {
 
     /* Can write to a via using either of the two 16 bytes blocks */
     if ((Address & ~0xf)==0xfe60 || (Address & ~0xf)==0xfe70) {
+        SyncIO();
         AdjustForIOWrite();
         UserVIAWrite((Address & 0xf),Value);
         return;
     }
 
     if ((Address & ~0x7)==0xfe00) {
+        SyncIO();
         AdjustForIOWrite();
         CRTCWrite(Address & 0x7, Value);
         return;
     }
 
     if (Address==0xfe08) {
+        SyncIO();
         AdjustForIOWrite();
         Write_ACIA_Control(Value);
         return;
     }
     if (Address==0xfe09) {
+        SyncIO();
         AdjustForIOWrite();
         Write_ACIA_Tx_Data(Value);
         return;
     }
     if (Address==0xfe10) {
+        SyncIO();
         AdjustForIOWrite();
         Write_SERPROC(Value);
         return;
@@ -746,7 +779,7 @@ void BeebWriteMem(int Address, int Value) {
     }
 
     if ((Address & ~0x7)==0xfe18 && MachineType==3) {
-        AtoDWrite((Address & 0xf),Value);
+        AtoDWrite((Address & 0x7),Value);
         return;
     }
 
@@ -789,6 +822,7 @@ void BeebWriteMem(int Address, int Value) {
     }
 
     if ((Address & ~0x1f)==0xfec0 && MachineType!=3) {
+        SyncIO();
         AdjustForIOWrite();
         AtoDWrite((Address & 0xf),Value);
         return;
@@ -802,13 +836,13 @@ void BeebWriteMem(int Address, int Value) {
             WriteTubeFromHostSide(Address&7,Value);
     }
 
-    if ((Address & ~0x3)==0xfc40) {
-        SCSIWrite((Address & 0x3),Value);
+    if ((Address & ~0x3)==0xfc10) {
+        TeleTextWrite((Address & 0x3),Value);
         return;
     }
 
-    if ((Address & ~0x3)==0xfc10) {
-        TeleTextWrite((Address & 0x3),Value);
+    if ((Address & ~0x3)==0xfc40) {
+        SCSIWrite((Address & 0x3),Value);
         return;
     }
 

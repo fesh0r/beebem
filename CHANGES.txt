@@ -395,3 +395,50 @@ Version 3.2 (Jon Welch)
 * Added support for Acorn Teletext Adapter
 * Added some enhancements to the debugger from Thomas Horsten.  Display of
   stack register and op codes for undocumented instructions.
+
+Version 3.3 (Mike Wyatt)
+-----------
+* Added menu options to enable/disable Teletext adapter and hard drive
+  emulation.  When enabled they cause corruption of Alien8 data.
+* Removed ADFS and ATS ROMs from Model-B configuration as they were causing
+  a few problems.
+* Improved VIA and interrupt timing and fixed instruction cycle count for
+  branches.  The following programs now run:
+    Nightshade (tape), Lancelot, The Empire Strikes Back, Dabs Fingerprint,
+    Yie Ar Kung-Foo (tape)
+* Added "Eject Disc" options to the file menu.  The name of the currently
+  loaded image file is shown next to the menu option.
+* Added two new debugger commands:
+    "c" to change memory contents
+    "w" to write the debug output buffer to a file
+* Change sound volume to be exponential (suggested by Rich Talbot-Watkins).
+  Seems to be a definite improvement on the linear scale.  There is a menu
+  option to switch between the two.
+
+Version 3.4 (Jon Welch)
+-----------
+* Added preliminary support for loading CSW format tape images
+* Added emulation of Microvitec touch screen (can be used with software
+  from Brilliant Computing)
+* Added user port breakout box
+* Added digital mousestick option
+* Fixed joystick emulation in Master 128 mode
+* Fixed problem of ESC key not always being detected
+* Fixed problem of accessing files when ADFS and DFS discs loaded side by side
+* Fixed a couple of tape related game loading problems
+* Fixed interrupt clearing issue in 8271 disk emulation (fixes save/restore
+  state in Twin Kingdom Valley)
+* Minor VIA timing tweak to make Snapper work again
+
+Version 3.5 (Mike Wyatt, Theo Lindebaum, Jon Welch)
+-----------
+* Added text to speech support and screen reader compatible text view for
+  use by visually impaired people.
+* Fixed support for MOS 3.50 in Master 128 mode.
+* Fixed a bunch of compiler warnings thrown up by VS2005.
+* Fixed some odd keyboard behaviour associated with AltGr key presses.
+* Fixed bug with speech output changing speed/pitch.
+* Fixed problem of saving to ADFS hard disc under 65C02 emulation.
+* Fixed user defined keyboard support so that shift key re-assignments
+  work.
+* Added menu options to disable selected keys within BeebEm.

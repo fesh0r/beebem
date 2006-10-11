@@ -162,10 +162,10 @@ BOOL UserKeyboardDialog( HWND      hwndParent )
     hwndMain = hwndParent;
     hwndGetkey = NULL;
 
-    fResult = DialogBox( hInst,
+    fResult = (DialogBox( hInst,
                          MAKEINTRESOURCE( IDD_USERKYBRD ),
                          hwndParent,
-                         (DLGPROC)pfnDlg );
+                         (DLGPROC)pfnDlg ) <= 0);
 
     //  Cleanup & exit.
 
@@ -274,14 +274,14 @@ int nCode = HIWORD(wParam);              //Notification code
             EndDialog( hwnd, TRUE );
             break;
         default:
-            ShowKeyDown( hwnd, wParam, (HWND)lParam );
+            ShowKeyDown( hwnd, (UINT)wParam, (HWND)lParam );
         };
         return TRUE;
 
     case WM_SYSKEYUP:
     case WM_KEYUP:
         ShowKeyUp();
-        SetBBCKeyForVKEY( wParam );
+        SetBBCKeyForVKEY( (UINT)wParam );
         return TRUE;
 
     case WM_DRAWITEM:
@@ -368,7 +368,7 @@ void DrawText( HDC hDC, RECT rect, HWND hWndctrl, COLORREF colour, BOOL Depresse
 
     GetWindowText( hWndctrl, text, 9 );
 
-    if (GetTextExtentPoint32( hDC, text, strlen(text), &Size ))
+    if (GetTextExtentPoint32( hDC, text, (int)strlen(text), &Size ))
     {
         // Set text colour.
         SetTextColor( hDC, colour );
@@ -379,13 +379,13 @@ void DrawText( HDC hDC, RECT rect, HWND hWndctrl, COLORREF colour, BOOL Depresse
                      (((rect.right - rect.left) - Size.cx ) / 2 ) + 1,
                      (((rect.bottom-rect.top) - Size.cy) / 2) + 1,
                      text,
-                     strlen( text ));
+                     (int)strlen( text ));
         else
             TextOut( hDC,
                      ((rect.right - rect.left) - Size.cx ) / 2,
                      ((rect.bottom-rect.top) - Size.cy) / 2,
                      text,
-                     strlen( text ));
+                     (int)strlen( text ));
     }
 
 } // DrawText

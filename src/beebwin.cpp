@@ -53,6 +53,8 @@
 #include "speech.h"
 #include "teletext.h"
 #include "avi.h"
+#include "csw.h"
+#include "serialdevices.h"
 
 // some LED based macros
 
@@ -99,14 +101,13 @@ EDCB ExtBoard={0,0,NULL};
 bool DiscLoaded[2]={FALSE,FALSE}; // Set to TRUE when a disc image has been loaded.
 char CDiscName[2][256]; // Filename of disc current in drive 0 and 1;
 char CDiscType[2]; // Current disc types
-bool MustEnableSound=FALSE; // Set to true if the directsound must be unmuted after menu loop exit.
 char FDCDLL[256];
 
 static const char *WindowTitle = "BeebEm - BBC Model B / Master 128 Emulator";
 static const char *AboutText = "BeebEm - Emulating:\n\nBBC Micro Model B\nBBC Micro Model B + IntegraB\n"
                                 "BBC Micro Model B Plus (128)\nAcorn Master 128\nAcorn 65C02 Second Processor\n"
                                 "Torch Z80 Second Processor\nMaster 512 Second Processor\nAcorn Z80 Second Processor\n\n"
-                                "Version 3.2, April 2006";
+                                "Version 3.5, October 2006";
 
 /* Configuration file strings */
 static const char *CFG_FILE_NAME = "BeebEm.ini";
@@ -148,6 +149,13 @@ static char *CFG_PRINTER_FILE = "PrinterFile";
 
 static char *CFG_MODEL_SECTION = "Model";
 static char *CFG_MACHINE_TYPE = "MachineType";
+
+#define CFG_KEYBOARD_LAYOUT "SYSTEM\\CurrentControlSet\\Control\\Keyboard Layout"
+#define CFG_SCANCODE_MAP "Scancode Map"
+static unsigned char CFG_DISABLE_WINDOWS_KEYS[24] = {
+    00,00,00,00,00,00,00,00,03,00,00,00,00,00,0x5B,0xE0,00,00,0x5C,0xE0,00,00,00,00
+};
+
 
 /* Prototypes */
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
@@ -247,8 +255,14 @@ void BeebWin::Initialise()
         m_vkeyPressed[k][0][1] = -1;
         m_vkeyPressed[k][1][1] = -1;
     }
+    m_DisableKeysWindows=0;
+    m_DisableKeysBreak=0;
+    m_DisableKeysEscape=0;
+    m_DisableKeysShortcut=0;
 
     LoadPreferences();
+
+    TouchScreenOpen();
 
     // Parse command after reading prefs - may override settings
     ParseCommandLine();
@@ -271,6 +285,9 @@ void BeebWin::Initialise()
     m_AviDC = NULL;
     m_AviDIB = NULL;
 
+    m_SpVoice = NULL;
+    m_hTextView = NULL;
+
     for(int i=0;i<256;i++)
         cols[i] = i;
 
@@ -286,6 +303,12 @@ void BeebWin::Initialise()
 
     if (m_DirectDrawEnabled)
         InitDirectX();
+
+    if (FAILED(CoInitialize(NULL)))
+        MessageBox(m_hWnd,"Failed to initialise COM\n",WindowTitle,MB_OK|MB_ICONERROR);
+
+    InitTextToSpeech();
+    InitTextView();
 
     /* Initialise printer */
     if (PrinterEnabled)
@@ -355,6 +378,14 @@ BeebWin::~BeebWin()
         DeleteObject(m_hBitmap);
     if (m_hDCBitmap != NULL)
         DeleteDC(m_hDCBitmap);
+
+    if (m_SpVoice)
+    {
+        m_SpVoice->Release();
+        m_SpVoice = NULL;
+    }
+
+    CoUninitialize();
 }
 
 /****************************************************************************/
@@ -398,8 +429,8 @@ void BeebWin::ResetBeebSystem(unsigned char NewModelType,unsigned char TubeStatu
     FreeDiscImage(1);
     Close1770Disc(0);
     Close1770Disc(1);
-    SCSIReset();
-    SASIReset();
+    if (HardDriveEnabled) SCSIReset();
+    if (HardDriveEnabled) SASIReset();
     TeleTextInit();
     if (MachineType==3) InvertTR00=FALSE;
     if (MachineType!=3) {
@@ -639,10 +670,12 @@ void BeebWin::InitMenu(void)
     CheckMenuItem(hMenu, m_MenuIdPrinterPort, MF_CHECKED);
     CheckMenuItem(hMenu, IDM_DDRAWONOFF, m_DirectDrawEnabled ? MF_CHECKED : MF_UNCHECKED);
     CheckMenuItem(hMenu, IDM_DDINVIDEORAM, m_DDS2InVideoRAM ? MF_CHECKED : MF_UNCHECKED);
-
     CheckMenuItem(hMenu, m_DDFullScreenMode, MF_CHECKED);
+    CheckMenuItem(hMenu, IDM_TEXTVIEW, m_TextViewEnabled ? MF_CHECKED:MF_UNCHECKED);
 
     CheckMenuItem(hMenu, ID_SERIAL, SerialPortEnabled ? MF_CHECKED:MF_UNCHECKED);
+    CheckMenuItem(hMenu, ID_TOUCHSCREEN, TouchScreenEnabled ? MF_CHECKED:MF_UNCHECKED);
+
     CheckMenuItem(hMenu, ID_COM1, (SerialPort==1)? MF_CHECKED:MF_UNCHECKED);
     CheckMenuItem(hMenu, ID_COM2, (SerialPort==2)? MF_CHECKED:MF_UNCHECKED);
     CheckMenuItem(hMenu, ID_COM3, (SerialPort==3)? MF_CHECKED:MF_UNCHECKED);
@@ -653,6 +686,9 @@ void BeebWin::InitMenu(void)
     CheckMenuItem(m_hMenu,ID_TAPESOUND,(TapeSoundEnabled)?MF_CHECKED:MF_UNCHECKED);
     CheckMenuItem(m_hMenu,IDM_SOUNDCHIP,(SoundChipEnabled)?MF_CHECKED:MF_UNCHECKED);
     CheckMenuItem(m_hMenu,ID_PSAMPLES,(PartSamples)?MF_CHECKED:MF_UNCHECKED);
+    CheckMenuItem(m_hMenu, IDM_EXPVOLUME, SoundExponentialVolume ? MF_CHECKED:MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_TEXTTOSPEECH, m_TextToSpeechEnabled ? MF_CHECKED:MF_UNCHECKED);
+
     CheckMenuItem(m_hMenu, IDM_TUBE, (TubeEnabled)?MF_CHECKED:MF_UNCHECKED);
     CheckMenuItem(m_hMenu, IDM_TUBE186, (Tube186Enabled)?MF_CHECKED:MF_UNCHECKED);
     CheckMenuItem(m_hMenu, IDM_TORCH, (TorchTube)?MF_CHECKED:MF_UNCHECKED);
@@ -661,9 +697,12 @@ void BeebWin::InitMenu(void)
     CheckMenuItem(m_hMenu,ID_UNLOCKTAPE,(UnlockTape)?MF_CHECKED:MF_UNCHECKED);
     CheckMenuItem(m_hMenu,m_MotionBlur,MF_CHECKED);
     CheckMenuItem(hMenu, ID_ECONET, EconetEnabled ? MF_CHECKED:MF_UNCHECKED);   //Rob
+    CheckMenuItem(hMenu, ID_TELETEXT, TeleTextAdapterEnabled ? MF_CHECKED:MF_UNCHECKED);
+    CheckMenuItem(hMenu, ID_HARDDRIVE, HardDriveEnabled ? MF_CHECKED:MF_UNCHECKED);
     CheckMenuItem(hMenu, IDM_SPEECH, SpeechDefault ? MF_CHECKED:MF_UNCHECKED);
 
     UpdateMonitorMenu();
+    UpdateDisableKeysMenu();
 
     /* Initialise the ROM Menu. */
     SetRomMenu();
@@ -690,6 +729,13 @@ void BeebWin::UpdateModelType() {
 void BeebWin::UpdateSFXMenu() {
     HMENU hMenu = m_hMenu;
     CheckMenuItem(hMenu,ID_SFX_RELAY,RelaySoundEnabled?MF_CHECKED:MF_UNCHECKED);
+}
+
+void BeebWin::UpdateDisableKeysMenu() {
+    CheckMenuItem(m_hMenu, IDM_DISABLEKEYSWINDOWS, m_DisableKeysWindows?MF_CHECKED:MF_UNCHECKED);
+    CheckMenuItem(m_hMenu, IDM_DISABLEKEYSBREAK, m_DisableKeysBreak?MF_CHECKED:MF_UNCHECKED);
+    CheckMenuItem(m_hMenu, IDM_DISABLEKEYSESCAPE, m_DisableKeysEscape?MF_CHECKED:MF_UNCHECKED);
+    CheckMenuItem(m_hMenu, IDM_DISABLEKEYSSHORTCUT, m_DisableKeysShortcut?MF_CHECKED:MF_UNCHECKED);
 }
 
 /****************************************************************************/
@@ -892,17 +938,34 @@ void BeebWin::ResetJoystick(void)
 /****************************************************************************/
 void BeebWin::SetMousestickButton(int button)
 {
-    if (m_MenuIdSticks == IDM_MOUSESTICK)
+    if ( (m_MenuIdSticks == IDM_AMOUSESTICK) || ((m_MenuIdSticks == IDM_DMOUSESTICK)) )
         JoystickButton = button;
 }
 
 /****************************************************************************/
 void BeebWin::ScaleMousestick(unsigned int x, unsigned int y)
 {
-    if (m_MenuIdSticks == IDM_MOUSESTICK)
+static int lastx = 32768;
+static int lasty = 32768;
+int dx, dy;
+
+    if (m_MenuIdSticks == IDM_AMOUSESTICK)              // Analogue mouse stick
     {
         JoystickX = (m_XWinSize - x) * 65535 / m_XWinSize;
         JoystickY = (m_YWinSize - y) * 65535 / m_YWinSize;
+    } else if (m_MenuIdSticks == IDM_DMOUSESTICK)       // Digital mouse stick
+    {
+        dx = x - lastx;
+        dy = y - lasty;
+
+        if (dx > 4) JoystickX = 0;
+        if (dx < -4) JoystickX = 65535;
+
+        if (dy > 4) JoystickY = 0;
+        if (dy < -4) JoystickY = 65535;
+
+        lastx = x;
+        lasty = y;
     }
 
     if (m_HideCursor)
@@ -973,70 +1036,167 @@ LRESULT CALLBACK WndProc(
             break;
 
         case WM_SYSKEYDOWN:
-            if (uParam != VK_F10)
-                break;
-        case WM_KEYDOWN:
-            // Reset shift state if it was set by Run Disc
-            if (mainWin->m_ShiftBooted)
+            //{char txt[100];sprintf(txt,"SysKeyD: %d, 0x%X\n", uParam, uParam);OutputDebugString(txt);}
+            if (mainWin->m_TextToSpeechEnabled &&
+                ((uParam >= VK_NUMPAD0 && uParam <= VK_NUMPAD9) ||
+                 uParam == VK_DECIMAL ||
+                 uParam == VK_HOME || uParam == VK_END ||
+                 uParam == VK_PRIOR || uParam == VK_NEXT ||
+                 uParam == VK_UP || uParam == VK_DOWN ||
+                 uParam == VK_LEFT || uParam == VK_RIGHT ||
+                 uParam == VK_INSERT || uParam == VK_DELETE ||
+                 uParam == VK_CLEAR))
             {
-                mainWin->m_ShiftBooted = false;
-                BeebKeyUp(0, 0);
+                mainWin->TextToSpeechKey(uParam);
+            }
+            else if (uParam == VK_OEM_8 /* Alt ` */)
+            {
+                mainWin->TextViewSyncWithBeebCursor();
             }
 
-            mainWin->TranslateKey(uParam, false, row, col);
+            if (uParam != VK_F10 && uParam != VK_CONTROL)
+                break;
+        case WM_KEYDOWN:
+            //{char txt[100];sprintf(txt,"KeyD: %d, 0x%X\n", uParam, uParam);OutputDebugString(txt);}
+            if (mainWin->m_TextToSpeechEnabled &&
+                ((uParam >= VK_NUMPAD0 && uParam <= VK_NUMPAD9) ||
+                 uParam == VK_DECIMAL ||
+                 uParam == VK_HOME || uParam == VK_END ||
+                 uParam == VK_PRIOR || uParam == VK_NEXT ||
+                 uParam == VK_UP || uParam == VK_DOWN ||
+                 uParam == VK_LEFT || uParam == VK_RIGHT ||
+                 uParam == VK_INSERT || uParam == VK_DELETE ||
+                 uParam == VK_CLEAR))
+            {
+                mainWin->TextToSpeechKey(uParam);
+            }
+            else
+            {
+                int i;
+                int mask;
+                bool bit;
+
+                mask = 0x01;
+                bit = false;
+
+                if (mBreakOutWindow == true)
+                {
+                    for (i = 0; i < 8; ++i)
+                    {
+                        if (BitKeys[i] == uParam)
+                        {
+                            if ((UserVIAState.ddrb & mask) == 0x00)
+                            {
+                                UserVIAState.irb &= ~mask;
+                                ShowInputs( (UserVIAState.orb & UserVIAState.ddrb) | (UserVIAState.irb & (~UserVIAState.ddrb)) );
+                                bit = true;
+                            }
+                        }
+                        mask <<= 1;
+                    }
+                }
+                if (bit == false)
+                {
+                    // Reset shift state if it was set by Run Disc
+                    if (mainWin->m_ShiftBooted)
+                    {
+                        mainWin->m_ShiftBooted = false;
+                        BeebKeyUp(0, 0);
+                    }
+
+                    mainWin->TranslateKey((int)uParam, false, row, col);
+                }
+            }
             break;
 
         case WM_SYSKEYUP:
-            if (uParam != VK_F10)
+            //{char txt[100];sprintf(txt,"SysKeyU: %d, 0x%X\n", uParam, uParam);OutputDebugString(txt);}
+            if (uParam != VK_F10 && uParam != VK_CONTROL)
                 break;
         case WM_KEYUP:
-            if (uParam == VK_DIVIDE)
+            //{char txt[100];sprintf(txt,"KeyU: %d, 0x%X\n", uParam, uParam);OutputDebugString(txt);}
+            if (uParam == VK_DIVIDE && !mainWin->m_DisableKeysShortcut)
             {
                 mainWin->QuickSave();
                 // Let user know state has been saved
                 FlashWindow(GETHWND, TRUE);
                 MessageBeep(MB_ICONEXCLAMATION);
             }
-            else if (uParam == VK_MULTIPLY)
+            else if (uParam == VK_MULTIPLY && !mainWin->m_DisableKeysShortcut)
             {
                 mainWin->QuickLoad();
                 // Let user know state has been loaded
                 FlashWindow(GETHWND, TRUE);
                 MessageBeep(MB_ICONEXCLAMATION);
             }
-            else if(mainWin->TranslateKey(uParam, true, row, col) < 0)
+            else
             {
-                if(row==-2)
-                { // Must do a reset!
-                    Init6502core();
-                    if (EnableTube) Init65C02core();
-                    if (Tube186Enabled) i86_main();
-                    Enable_Z80 = 0;
-                    if (TorchTube || AcornZ80)
+                int i;
+                int mask;
+                bool bit;
+
+                mask = 0x01;
+                bit = false;
+
+                if (mBreakOutWindow == true)
+                {
+                    for (i = 0; i < 8; ++i)
                     {
-                        R1Status = 0;
-                        ResetTube();
-                        init_z80();
-                        Enable_Z80 = 1;
+                        if (BitKeys[i] == uParam)
+                        {
+                            if ((UserVIAState.ddrb & mask) == 0x00)
+                            {
+                                UserVIAState.irb |= mask;
+                                ShowInputs( (UserVIAState.orb & UserVIAState.ddrb) | (UserVIAState.irb & (~UserVIAState.ddrb)) );
+                                bit = true;
+                            }
+                        }
+                        mask <<= 1;
                     }
-                    Disc8271_reset();
-                    Reset1770();
-                    if (EconetEnabled) EconetReset();//Rob
-                    SCSIReset();
-                    SASIReset();
-                    TeleTextInit();
-                    //SoundChipReset();
                 }
-                else if(row==-3)
+
+                if (bit == false)
                 {
-                    if (col==-3) SoundTuning+=0.1; // Page Up
-                    if (col==-4) SoundTuning-=0.1; // Page Down
-                }
-                else if(row==-4)
-                {
-                    mainWin->AdjustSpeed(col == 0);
+                    if(mainWin->TranslateKey((int)uParam, true, row, col) < 0)
+                    {
+                        if(row==-2)
+                        { // Must do a reset!
+                            Init6502core();
+                            if (EnableTube) Init65C02core();
+                            if (Tube186Enabled) i86_main();
+                            Enable_Z80 = 0;
+                            if (TorchTube || AcornZ80)
+                            {
+                                R1Status = 0;
+                                ResetTube();
+                                init_z80();
+                                Enable_Z80 = 1;
+                            }
+                            Disc8271_reset();
+                            Reset1770();
+                            if (EconetEnabled) EconetReset();//Rob
+                            if (HardDriveEnabled) SCSIReset();
+                            if (HardDriveEnabled) SASIReset();
+                            TeleTextInit();
+                            //SoundChipReset();
+                        }
+                        else if(row==-3)
+                        {
+                            if (col==-3) SoundTuning+=0.1; // Page Up
+                            if (col==-4) SoundTuning-=0.1; // Page Down
+                        }
+                        else if(row==-4)
+                        {
+                            mainWin->AdjustSpeed(col == 0);
+                        }
+                    }
                 }
             }
+            break;
+
+        case WM_ACTIVATE:
+            if (mainWin)
+                mainWin->Activate(uParam != WA_INACTIVE);
             break;
 
         case WM_SETFOCUS:
@@ -1126,7 +1286,7 @@ LRESULT CALLBACK WndProc(
 int BeebWin::TranslateKey(int vkey, int keyUp, int &row, int &col)
 {
     // Key track of shift state
-    if (vkey == 16)
+    if (transTable[vkey][0] == 0 && transTable[vkey][1] == 0)
     {
         if (keyUp)
             m_ShiftPressed = false;
@@ -1303,6 +1463,13 @@ int BeebWin::TranslateKey(int vkey, int keyUp, int &row, int &col)
             }
         }
 
+        if (m_DisableKeysShortcut && (row == -3 || row == -4))
+            row = -10;
+        if (m_DisableKeysEscape && row == 7 && col == 0)
+            row = -10;
+        if (m_DisableKeysBreak && row == -2 && col == -2)
+            row = -10;
+
         if (row >= 0)
         {
             // Make sure shift state is correct
@@ -1365,6 +1532,13 @@ void BeebWin::updateLines(HDC hDC, int starty, int nlines)
     if (m_screen == NULL)
         return;
 
+    // Check for text view
+    if (m_TextViewEnabled)
+    {
+        TextView();
+        return;
+    }
+
     // Use last stored params?
     if (starty == 0 && nlines == 0)
     {
@@ -1419,7 +1593,7 @@ void BeebWin::updateLines(HDC hDC, int starty, int nlines)
         {
             SetBkMode(hDC,TRANSPARENT);
             SetTextColor(hDC,0x808080);
-            TextOut(hDC,0,TextStart,ExtBoard.BoardName,strlen(ExtBoard.BoardName));
+            TextOut(hDC,0,TextStart,ExtBoard.BoardName,(int)strlen(ExtBoard.BoardName));
         }
     }
     else
@@ -1453,7 +1627,7 @@ void BeebWin::updateLines(HDC hDC, int starty, int nlines)
             {
                 SetBkMode(hdc,TRANSPARENT);
                 SetTextColor(hdc,0x808080);
-                TextOut(hdc,0,TextStart,ExtBoard.BoardName,strlen(ExtBoard.BoardName));
+                TextOut(hdc,0,TextStart,ExtBoard.BoardName,(int)strlen(ExtBoard.BoardName));
             }
 
             if (m_ShowSpeedAndFPS && m_isFullScreen)
@@ -1462,7 +1636,7 @@ void BeebWin::updateLines(HDC hDC, int starty, int nlines)
                 sprintf(fps, "%2.2f %2d", m_RelativeSpeed, (int)m_FramesPerSecond);
                 SetBkMode(hdc,TRANSPARENT);
                 SetTextColor(hdc,0x808080);
-                TextOut(hdc,(TeletextEnabled)?490:580,TextStart,fps,strlen(fps));
+                TextOut(hdc,(TeletextEnabled)?490:580,TextStart,fps,(int)strlen(fps));
             }
 
             m_DDS2One->ReleaseDC(hdc);
@@ -1971,10 +2145,62 @@ void BeebWin::TranslateKeyMapping(void)
     }
 }
 
+/****************************************************************************/
 void BeebWin::SetImageName(char *DiscName,char Drive,char DType) {
     strcpy(CDiscName[Drive],DiscName);
     CDiscType[Drive]=DType;
     DiscLoaded[Drive]=TRUE;
+
+    const int maxMenuItemLen = 100;
+    char menuStr[maxMenuItemLen+1];
+    char *fname = strrchr(CDiscName[Drive], '\\');
+    if (fname == NULL)
+        fname = strrchr(CDiscName[Drive], '/');
+    if (fname == NULL)
+        fname = CDiscName[Drive];
+    else
+        fname++;
+
+    sprintf(menuStr, "Eject Disc %d: ", Drive);
+    strncat(menuStr, fname, maxMenuItemLen-strlen(menuStr));
+    menuStr[maxMenuItemLen] = '\0';
+
+    MENUITEMINFO mii = {0};
+    mii.cbSize = sizeof(mii);
+    mii.fMask = MIIM_STRING;
+    mii.fType = MFT_STRING;
+    mii.dwTypeData = menuStr;
+    SetMenuItemInfo(m_hMenu, Drive == 0 ? IDM_EJECTDISC0 : IDM_EJECTDISC1, FALSE, &mii);
+}
+
+void BeebWin::EjectDiscImage(int Drive)
+{
+    Eject8271DiscImage(Drive);
+    Close1770Disc(Drive);
+
+    strcpy(CDiscName[Drive], "");
+    CDiscType[Drive] = 0;
+    DiscLoaded[Drive] = FALSE;
+
+    MENUITEMINFO mii = {0};
+    mii.cbSize = sizeof(mii);
+    mii.fMask = MIIM_STRING;
+    mii.fType = MFT_STRING;
+
+    if (Drive == 0)
+    {
+        mii.dwTypeData = "Eject Disc 0";
+        SetMenuItemInfo(m_hMenu, IDM_EJECTDISC0, FALSE, &mii);
+        EnableMenuItem(m_hMenu, IDM_WPDISC0, MF_ENABLED );
+        CheckMenuItem(m_hMenu, IDM_WPDISC0, MF_CHECKED);
+    }
+    else
+    {
+        mii.dwTypeData = "Eject Disc 1";
+        SetMenuItemInfo(m_hMenu, IDM_EJECTDISC1, FALSE, &mii);
+        EnableMenuItem(m_hMenu, IDM_WPDISC1, MF_ENABLED );
+        CheckMenuItem(m_hMenu, IDM_WPDISC1, MF_CHECKED);
+    }
 }
 
 /****************************************************************************/
@@ -2021,7 +2247,7 @@ int BeebWin::ReadDisc(int Drive,HMENU dmenu)
     gotName = GetOpenFileName(&ofn);
     if (gotName)
     {
-        unsigned PathLength = strrchr(FileName, '\\') - FileName;
+        unsigned int PathLength = (unsigned int)(strrchr(FileName, '\\') - FileName);
         strncpy(DefaultPath, FileName, PathLength);
         DefaultPath[PathLength] = 0;
         SysReg.SetStringValue(HKEY_CURRENT_USER,CFG_REG_KEY,"DiscsPath",DefaultPath);
@@ -2036,15 +2262,15 @@ int BeebWin::ReadDisc(int Drive,HMENU dmenu)
             {
             char *ext = strrchr(FileName, '.');
             if (ext != NULL)
-              if (stricmp(ext+1, "dsd") == 0)
+              if (_stricmp(ext+1, "dsd") == 0)
                 dsd = true;
-              if (stricmp(ext+1, "adl") == 0)
+              if (_stricmp(ext+1, "adl") == 0)
                 adfs = true;
-              if (stricmp(ext+1, "adf") == 0)
+              if (_stricmp(ext+1, "adf") == 0)
                 adfs = true;
-              if (stricmp(ext+1, "img") == 0)
+              if (_stricmp(ext+1, "img") == 0)
                 img = true;
-              if (stricmp(ext+1, "dos") == 0)
+              if (_stricmp(ext+1, "dos") == 0)
                 dos = true;
             break;
             }
@@ -2122,7 +2348,8 @@ void BeebWin::LoadTape(void)
     ofn.lStructSize = sizeof(OPENFILENAME);
     ofn.hwndOwner = m_hWnd;
     ofn.hInstance = NULL;
-    ofn.lpstrFilter = "UEF Tape File (*.uef)\0*.uef\0";
+    ofn.lpstrFilter = "UEF Tape File (*.uef)\0*.uef\0"
+                      "CSW Tape File (*.csw)\0*.csw\0";
     ofn.lpstrCustomFilter = NULL;
     ofn.nMaxCustFilter = 0;
     ofn.lpstrFile = FileName;
@@ -2141,12 +2368,13 @@ void BeebWin::LoadTape(void)
 
     if (GetOpenFileName(&ofn))
     {
-        unsigned PathLength = strrchr(FileName, '\\') - FileName;
+        unsigned int PathLength = (unsigned int)(strrchr(FileName, '\\') - FileName);
         strncpy(DefaultPath, FileName, PathLength);
         DefaultPath[PathLength] = 0;
         SysReg.SetStringValue(HKEY_CURRENT_USER,CFG_REG_KEY,"TapesPath",DefaultPath);
 
-        LoadUEF(FileName);
+        if (strstr(FileName, ".uef")) LoadUEF(FileName);
+        if (strstr(FileName, ".csw")) LoadCSW(FileName);
     }
 }
 
@@ -2284,7 +2512,7 @@ void BeebWin::NewDiscImage(int Drive)
 
     if (GetSaveFileName(&ofn))
     {
-        unsigned PathLength = strrchr(FileName, '\\') - FileName;
+        unsigned int PathLength = (unsigned int)(strrchr(FileName, '\\') - FileName);
         strncpy(DefaultPath, FileName, PathLength);
         DefaultPath[PathLength] = 0;
         SysReg.SetStringValue(HKEY_CURRENT_USER,CFG_REG_KEY,"DiscsPath",DefaultPath);
@@ -2359,7 +2587,7 @@ void BeebWin::SaveState()
 
     if (GetSaveFileName(&ofn))
     {
-        unsigned PathLength = strrchr(FileName, '\\') - FileName;
+        unsigned int PathLength = (unsigned int)(strrchr(FileName, '\\') - FileName);
         strncpy(DefaultPath, FileName, PathLength);
         DefaultPath[PathLength] = 0;
         SysReg.SetStringValue(HKEY_CURRENT_USER,CFG_REG_KEY,"StatesPath",DefaultPath);
@@ -2410,7 +2638,7 @@ void BeebWin::RestoreState()
 
     if (GetOpenFileName(&ofn))
     {
-        unsigned PathLength = strrchr(FileName, '\\') - FileName;
+        unsigned int PathLength = (unsigned int)(strrchr(FileName, '\\') - FileName);
         strncpy(DefaultPath, FileName, PathLength);
         DefaultPath[PathLength] = 0;
         SysReg.SetStringValue(HKEY_CURRENT_USER,CFG_REG_KEY,"StatesPath",DefaultPath);
@@ -2632,10 +2860,10 @@ void BeebWin::LoadPreferences()
         m_DDFullScreenMode = GetPrivateProfileInt(CFG_VIEW_SECTION, "DDFullScreenMode", ID_VIEW_DD_640X480, CFG_FILE_NAME);
     }
     if (SysReg.GetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,"isDD32",&flag,binsize)) {
-        m_isDD32 = flag;
+        m_isDD32 = (flag != 0);
     }
     else {
-        m_isDD32 = GetPrivateProfileInt(CFG_VIEW_SECTION, "isDD32", 0, CFG_FILE_NAME);
+        m_isDD32 = (GetPrivateProfileInt(CFG_VIEW_SECTION, "isDD32", 0, CFG_FILE_NAME) != 0);
     }
     if (SysReg.GetDWORDValue(HKEY_CURRENT_USER,CFG_REG_KEY,CFG_VIEW_WIN_SIZE,dword)) {
         m_MenuIdWinSize = dword;
@@ -2653,10 +2881,10 @@ void BeebWin::LoadPreferences()
     }
     else {
         if (SysReg.GetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,"isFullScreen",&flag,binsize)) {
-            m_isFullScreen = flag;
+            m_isFullScreen = (flag != 0);
         }
         else {
-            m_isFullScreen = GetPrivateProfileInt(CFG_VIEW_SECTION, "isFullScreen", 0, CFG_FILE_NAME);
+            m_isFullScreen = (GetPrivateProfileInt(CFG_VIEW_SECTION, "isFullScreen", 0, CFG_FILE_NAME) != 0);
         }
     }
     TranslateWindowSize();
@@ -2685,7 +2913,7 @@ void BeebWin::LoadPreferences()
         LEDByte=0;
     }
     DiscLedColour=LED_COLOUR_TYPE;
-    LEDs.ShowDisc=LED_SHOW_DISC;
+    LEDs.ShowDisc=(LED_SHOW_DISC != 0);
     LEDs.ShowKB=LED_SHOW_KB;
     if (SysReg.GetDWORDValue(HKEY_CURRENT_USER,CFG_REG_KEY,"MotionBlur",dword)) {
         m_MotionBlur = dword;
@@ -2705,6 +2933,10 @@ void BeebWin::LoadPreferences()
         m_BlurIntensities[7]=12;
     }
     *binsize=1;
+    RegRes=SysReg.GetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,"TextViewEnabled",&m_TextViewEnabled,binsize);
+    if (!RegRes) {
+        m_TextViewEnabled=0;
+    }
 
 
     if (SysReg.GetDWORDValue(HKEY_CURRENT_USER,CFG_REG_KEY,CFG_SPEED_TIMING,dword)) {
@@ -2775,6 +3007,14 @@ void BeebWin::LoadPreferences()
 //  if (!RegRes) {
 //      UseHostClock=1;
 //  }
+    RegRes=SysReg.GetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,"ExponentialVolume",&SoundExponentialVolume,binsize);
+    if (!RegRes) {
+        SoundExponentialVolume=1;
+    }
+    RegRes=SysReg.GetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,"TextToSpeechEnabled",&m_TextToSpeechEnabled,binsize);
+    if (!RegRes) {
+        m_TextToSpeechEnabled=0;
+    }
 
 
     if (SysReg.GetDWORDValue(HKEY_CURRENT_USER,CFG_REG_KEY,CFG_OPTIONS_STICKS,dword)) {
@@ -2826,6 +3066,37 @@ void BeebWin::LoadPreferences()
         m_KeyMapFunc = flag;
     }
     TranslateKeyMapping();
+
+    *binsize=24;
+    if (SysReg.GetBinaryValue(HKEY_LOCAL_MACHINE,CFG_KEYBOARD_LAYOUT,
+                              CFG_SCANCODE_MAP,keyData,binsize) && *binsize==24) {
+        m_DisableKeysWindows=1;
+    }
+    else {
+        m_DisableKeysWindows=0;
+    }
+    *binsize=1;
+
+    RegRes=SysReg.GetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,"DisableKeysBreak",&m_DisableKeysBreak,binsize);
+    if (!RegRes) {
+        m_DisableKeysBreak=0;
+    }
+    RegRes=SysReg.GetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,"DisableKeysEscape",&m_DisableKeysEscape,binsize);
+    if (!RegRes) {
+        m_DisableKeysEscape=0;
+    }
+    RegRes=SysReg.GetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,"DisableKeysShortcut",&m_DisableKeysShortcut,binsize);
+    if (!RegRes) {
+        m_DisableKeysShortcut=0;
+    }
+
+    *binsize=8;
+    sprintf(CfgName, "BitKeys");
+    if (SysReg.GetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,CfgName,keyData,binsize)) {
+        for (key=0; key<8; ++key)
+            BitKeys[key] = keyData[key];
+    }
+
     *binsize=256;
     sprintf(CfgName, "%sRow", CFG_OPTIONS_USER_KEY_MAP);
     if (SysReg.GetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,CfgName,keyData,binsize)) {
@@ -2941,6 +3212,10 @@ void BeebWin::LoadPreferences()
     if (!RegRes) {
         SerialPortEnabled=0;
     }
+    RegRes=SysReg.GetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,"TouchScreenEnabled",&TouchScreenEnabled,binsize);
+    if (!RegRes) {
+        TouchScreenEnabled=0;
+    }
     RegRes=SysReg.GetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,"SerialPort",&SerialPort,binsize);
     if (!RegRes) {
         SerialPort=2;
@@ -2995,6 +3270,15 @@ void BeebWin::LoadPreferences()
     RegRes=SysReg.GetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,"SoundBlockSize",&SBSize,binsize);
     if (!RegRes) {
         SBSize=0;
+    }
+
+    RegRes=SysReg.GetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,"TeleTextAdapterEnabled",&TeleTextAdapterEnabled,binsize);
+    if (!RegRes) {
+        TeleTextAdapterEnabled=0;
+    }
+    RegRes=SysReg.GetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,"HardDriveEnabled",&HardDriveEnabled,binsize);
+    if (!RegRes) {
+        HardDriveEnabled=0;
     }
 
     *binsize=sizeof(rect);
@@ -3073,6 +3357,7 @@ void BeebWin::SavePreferences()
     *binsize=8;
     SysReg.SetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,"MotionBlurIntensities",m_BlurIntensities,binsize);
     *binsize=1;
+    SysReg.SetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,"TextViewEnabled",&m_TextViewEnabled,binsize);
 
     SysReg.SetDWORDValue(HKEY_CURRENT_USER,CFG_REG_KEY, CFG_SPEED_TIMING, m_MenuIdTiming);
 
@@ -3088,6 +3373,8 @@ void BeebWin::SavePreferences()
     SysReg.SetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,"UsePrimaryBuffer",&UsePrimaryBuffer,binsize);
     SysReg.SetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,"Part Samples",&PartSamples,binsize);
 //  SysReg.SetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,"UseHostClock",&UseHostClock,binsize);
+    SysReg.SetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,"ExponentialVolume",&SoundExponentialVolume,binsize);
+    SysReg.SetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,"TextToSpeechEnabled",&m_TextToSpeechEnabled,binsize);
 
     SysReg.SetDWORDValue(HKEY_CURRENT_USER,CFG_REG_KEY, CFG_OPTIONS_STICKS, m_MenuIdSticks);
     flag = m_FreezeWhenInactive;
@@ -3099,6 +3386,11 @@ void BeebWin::SavePreferences()
     SysReg.SetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,"KeyMapAS",&flag,binsize);
     flag = m_KeyMapFunc;
     SysReg.SetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,"KeyMapFunc",&flag,binsize);
+
+    SysReg.SetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,"DisableKeysBreak",&m_DisableKeysBreak,binsize);
+    SysReg.SetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,"DisableKeysEscape",&m_DisableKeysEscape,binsize);
+    SysReg.SetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,"DisableKeysShortcut",&m_DisableKeysShortcut,binsize);
+
     *binsize=256;
     for (key=0; key<256; ++key)
         keyData[key] = UserKeymap[key][0];
@@ -3109,6 +3401,12 @@ void BeebWin::SavePreferences()
     sprintf(CfgName, "%sCol", CFG_OPTIONS_USER_KEY_MAP);
     SysReg.SetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,CfgName,keyData,binsize);
     *binsize=1;
+
+    *binsize=8;
+    for (key=0; key<8; ++key)
+        keyData[key] = BitKeys[key];
+    sprintf(CfgName, "BitKeys");
+    SysReg.SetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,CfgName,keyData,binsize);
 
     flag = AMXMouseEnabled;
     SysReg.SetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,CFG_AMX_ENABLED,&flag,binsize);
@@ -3126,6 +3424,7 @@ void BeebWin::SavePreferences()
     *binsize=1;
     flag=UnlockTape;
     SysReg.SetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,"UnlockTape",&flag,binsize);
+    SysReg.SetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,"TouchScreenEnabled",&TouchScreenEnabled,binsize);
     SysReg.SetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,"SerialPortEnabled",&SerialPortEnabled,binsize);
     SysReg.SetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,"SerialPort",&SerialPort,binsize);
     SysReg.SetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,"EconetEnabled",&EconetEnabled,binsize); //Rob
@@ -3140,6 +3439,8 @@ void BeebWin::SavePreferences()
     SysReg.SetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,"Basic Hardware",&BHardware,binsize);
     SysReg.SetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,"Teletext Half Mode",&THalfMode,binsize);
     SysReg.SetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,"SoundBlockSize",&SBSize,binsize);
+    SysReg.SetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,"TeleTextAdapterEnabled",&TeleTextAdapterEnabled,binsize);
+    SysReg.SetBinaryValue(HKEY_CURRENT_USER,CFG_REG_KEY,"HardDriveEnabled",&HardDriveEnabled,binsize);
 
     SysReg.SetDWORDValue(HKEY_CURRENT_USER,CFG_REG_KEY,"CaptureResolution",m_MenuIdAviResolution);
     SysReg.SetDWORDValue(HKEY_CURRENT_USER,CFG_REG_KEY,"FrameSkip",m_MenuIdAviSkip);
@@ -3311,6 +3612,7 @@ void BeebWin::TranslateAMX(void)
 
 void BeebWin::UpdateSerialMenu(HMENU hMenu) {
     CheckMenuItem(hMenu, ID_SERIAL, (SerialPortEnabled)?MF_CHECKED:MF_UNCHECKED);
+    CheckMenuItem(hMenu, ID_TOUCHSCREEN, (TouchScreenEnabled)?MF_CHECKED:MF_UNCHECKED);
     CheckMenuItem(hMenu, ID_COM1, (SerialPort==1)?MF_CHECKED:MF_UNCHECKED);
     CheckMenuItem(hMenu, ID_COM2, (SerialPort==2)?MF_CHECKED:MF_UNCHECKED);
     CheckMenuItem(hMenu, ID_COM3, (SerialPort==3)?MF_CHECKED:MF_UNCHECKED);
@@ -3360,16 +3662,13 @@ void BeebWin::HandleCommand(int MenuId)
             ResetBeebSystem(MachineType,TubeEnabled,0);
             BeebKeyDown(0, 0); // Shift key
         }
-        MustEnableSound=TRUE;
         break;
 
     case IDM_LOADSTATE:
         RestoreState();
-        MustEnableSound=TRUE;
         break;
     case IDM_SAVESTATE:
         SaveState();
-        MustEnableSound=TRUE;
         break;
 
     case IDM_QUICKLOAD:
@@ -3381,25 +3680,27 @@ void BeebWin::HandleCommand(int MenuId)
 
     case IDM_LOADDISC0:
         ReadDisc(0,hMenu);
-        MustEnableSound=TRUE;
         break;
     case IDM_LOADDISC1:
         ReadDisc(1,hMenu);
-        MustEnableSound=TRUE;
         break;
 
     case ID_LOADTAPE:
         LoadTape();
-        MustEnableSound=TRUE;
         break;
 
     case IDM_NEWDISC0:
         NewDiscImage(0);
-        MustEnableSound=TRUE;
         break;
     case IDM_NEWDISC1:
         NewDiscImage(1);
-        MustEnableSound=TRUE;
+        break;
+
+    case IDM_EJECTDISC0:
+        EjectDiscImage(0);
+        break;
+    case IDM_EJECTDISC1:
+        EjectDiscImage(1);
         break;
 
     case IDM_WPDISC0:
@@ -3433,7 +3734,6 @@ void BeebWin::HandleCommand(int MenuId)
             }
             TranslatePrinterPort();
         }
-        MustEnableSound=TRUE;
         break;
     case IDM_PRINTER_LPT1:
     case IDM_PRINTER_LPT2:
@@ -3457,18 +3757,56 @@ void BeebWin::HandleCommand(int MenuId)
         break;
 
     case ID_SERIAL:
+        if (TouchScreenEnabled)
+        {
+            TouchScreenClose();
+            TouchScreenEnabled = false;
+        }
+
         SerialPortEnabled=1-SerialPortEnabled;
         bSerialStateChanged=TRUE;
         UpdateSerialMenu(hMenu);
         break;
+
+    case ID_TOUCHSCREEN:
+
+        if (TouchScreenEnabled)
+        {
+            TouchScreenClose();
+        }
+
+        TouchScreenEnabled = 1 - TouchScreenEnabled;
+
+        if (TouchScreenEnabled)
+        {
+            // Also switch on analogue mousestick (touch screen uses
+            // mousestick position)
+            if (m_MenuIdSticks != IDM_AMOUSESTICK)
+                HandleCommand(IDM_AMOUSESTICK);
+
+            SerialPortEnabled = true;
+
+            Kill_Serial();
+
+            SerialPort = 0;
+            bSerialStateChanged=TRUE;
+            TouchScreenOpen();
+        }
+        UpdateSerialMenu(hMenu);
+        break;
+
     case ID_COM1:
-        SerialPort=1; UpdateSerialMenu(hMenu); bSerialStateChanged=TRUE; break;
+        SerialPort=1; bSerialStateChanged=TRUE; TouchScreenEnabled = false; TouchScreenClose(); UpdateSerialMenu(hMenu); break;
+
     case ID_COM2:
-        SerialPort=2; UpdateSerialMenu(hMenu); bSerialStateChanged=TRUE; break;
+        SerialPort=2; bSerialStateChanged=TRUE; TouchScreenEnabled = false; TouchScreenClose(); UpdateSerialMenu(hMenu); break;
+
     case ID_COM3:
-        SerialPort=3; UpdateSerialMenu(hMenu); bSerialStateChanged=TRUE; break;
+        SerialPort=3; bSerialStateChanged=TRUE; TouchScreenEnabled = false; TouchScreenClose(); UpdateSerialMenu(hMenu); break;
+
     case ID_COM4:
-        SerialPort=4; UpdateSerialMenu(hMenu); bSerialStateChanged=TRUE; break;
+        SerialPort=4; bSerialStateChanged=TRUE; TouchScreenEnabled = false; TouchScreenClose(); UpdateSerialMenu(hMenu); break;
+
 
     //Rob
     case ID_ECONET:
@@ -3724,7 +4062,8 @@ void BeebWin::HandleCommand(int MenuId)
         break;
 
     case IDM_JOYSTICK:
-    case IDM_MOUSESTICK:
+    case IDM_AMOUSESTICK:
+    case IDM_DMOUSESTICK:
         /* Disable current selection */
         if (m_MenuIdSticks != 0)
         {
@@ -3804,7 +4143,6 @@ void BeebWin::HandleCommand(int MenuId)
 
     case IDM_DEFINEKEYMAP:
         UserKeyboardDialog( m_hWnd );
-        MustEnableSound=TRUE;
         break;
 
     case IDM_USERKYBDMAPPING:
@@ -4055,7 +4393,6 @@ void BeebWin::HandleCommand(int MenuId)
     case ID_FDC_DLL:
         if (MachineType != 3)
             SelectFDC();
-        MustEnableSound=TRUE;
         break;
     case ID_8271:
         KillDLLs();
@@ -4101,7 +4438,15 @@ void BeebWin::HandleCommand(int MenuId)
             TapeControlOpenDialog(hInst, m_hWnd);
         break;
 
-//  case ID_HOSTCLOCK:
+    case ID_BREAKOUT:
+        if (mBreakOutWindow)
+            BreakOutCloseDialog();
+        else
+            BreakOutOpenDialog(hInst, m_hWnd);
+        break;
+
+
+        //  case ID_HOSTCLOCK:
 //      UseHostClock=1-UseHostClock;
 //      CheckMenuItem(m_hMenu,ID_HOSTCLOCK,(UseHostClock)?MF_CHECKED:MF_UNCHECKED);
 //      SoundReset();
@@ -4145,6 +4490,10 @@ void BeebWin::HandleCommand(int MenuId)
     case ID_443:
         SBSize=0;
         UpdateOptiMenu();
+        break;
+    case IDM_EXPVOLUME:
+        SoundExponentialVolume=1-SoundExponentialVolume;
+        CheckMenuItem(m_hMenu, IDM_EXPVOLUME, SoundExponentialVolume ? MF_CHECKED:MF_UNCHECKED);
         break;
 
     case IDM_SHOWDEBUGGER:
@@ -4217,6 +4566,106 @@ void BeebWin::HandleCommand(int MenuId)
             }
         }
         break;
+
+    case ID_TELETEXT:
+        TeleTextAdapterEnabled = 1-TeleTextAdapterEnabled;
+        TeleTextInit();
+        CheckMenuItem(hMenu, ID_TELETEXT, TeleTextAdapterEnabled ? MF_CHECKED:MF_UNCHECKED);
+        break;
+
+    case ID_HARDDRIVE:
+        HardDriveEnabled = 1-HardDriveEnabled;
+        SCSIReset();
+        SASIReset();
+        CheckMenuItem(hMenu, ID_HARDDRIVE, HardDriveEnabled ? MF_CHECKED:MF_UNCHECKED);
+        break;
+
+    case IDM_TEXTTOSPEECH:
+        m_TextToSpeechEnabled = 1-m_TextToSpeechEnabled;
+        InitTextToSpeech();
+        break;
+
+    case IDM_TEXTVIEW:
+        m_TextViewEnabled = 1-m_TextViewEnabled;
+        InitTextView();
+        break;
+
+    case IDM_DISABLEKEYSWINDOWS:
+    {
+        bool reboot = false;
+        m_DisableKeysWindows=1-m_DisableKeysWindows;
+        UpdateDisableKeysMenu();
+        if (m_DisableKeysWindows)
+        {
+            // Give user warning
+            if (MessageBox(m_hWnd,"Disabling the Windows keys will affect the whole PC.\n"
+                           "Go ahead and disable the Windows keys?",
+                           WindowTitle,MB_YESNO|MB_ICONQUESTION) == IDYES)
+            {
+                *binsize=sizeof(CFG_DISABLE_WINDOWS_KEYS);
+                SysReg.SetBinaryValue(HKEY_LOCAL_MACHINE, CFG_KEYBOARD_LAYOUT,
+                                      CFG_SCANCODE_MAP, CFG_DISABLE_WINDOWS_KEYS, binsize);
+                reboot = true;
+            }
+            else
+            {
+                m_DisableKeysWindows=0;
+                UpdateDisableKeysMenu();
+            }
+        }
+        else
+        {
+            // Delete does not work?
+            // SysReg.DeleteKey(HKEY_LOCAL_MACHINE, CFG_KEYBOARD_LAYOUT "\\" CFG_SCANCODE_MAP);
+            *binsize=0;
+            SysReg.SetBinaryValue(HKEY_LOCAL_MACHINE, CFG_KEYBOARD_LAYOUT,
+                                  CFG_SCANCODE_MAP, CFG_DISABLE_WINDOWS_KEYS, binsize);
+            reboot = true;
+        }
+
+        if (reboot)
+        {
+            // Ask user for reboot
+            if (MessageBox(m_hWnd,"Reboot required for key change to\ntake effect. Reboot now?",
+                           WindowTitle,MB_YESNO|MB_ICONQUESTION) == IDYES)
+            {
+                RebootSystem();
+            }
+        }
+        break;
+    }
+    case IDM_DISABLEKEYSBREAK:
+        m_DisableKeysBreak=1-m_DisableKeysBreak;
+        UpdateDisableKeysMenu();
+        break;
+    case IDM_DISABLEKEYSESCAPE:
+        m_DisableKeysEscape=1-m_DisableKeysEscape;
+        UpdateDisableKeysMenu();
+        break;
+    case IDM_DISABLEKEYSSHORTCUT:
+        m_DisableKeysShortcut=1-m_DisableKeysShortcut;
+        UpdateDisableKeysMenu();
+        break;
+    case IDM_DISABLEKEYSALL:
+        if (m_DisableKeysWindows && m_DisableKeysBreak &&
+            m_DisableKeysEscape && m_DisableKeysShortcut)
+        {
+            if (m_DisableKeysWindows)
+                HandleCommand(IDM_DISABLEKEYSWINDOWS);
+            m_DisableKeysBreak=0;
+            m_DisableKeysEscape=0;
+            m_DisableKeysShortcut=0;
+        }
+        else
+        {
+            if (!m_DisableKeysWindows)
+                HandleCommand(IDM_DISABLEKEYSWINDOWS);
+            m_DisableKeysBreak=1;
+            m_DisableKeysEscape=1;
+            m_DisableKeysShortcut=1;
+        }
+        UpdateDisableKeysMenu();
+        break;
     }
 
     SetSound(UNMUTED);
@@ -4236,13 +4685,20 @@ void BeebWin::SetSoundMenu(void) {
     SetPBuff();
 }
 
+void BeebWin::Activate(BOOL active)
+{
+    if (active)
+        m_frozen = FALSE;
+    else if (m_FreezeWhenInactive)
+        m_frozen = TRUE;
+}
+
 void BeebWin::Focus(BOOL gotit)
 {
-    if (gotit)
-        m_frozen = FALSE;
-    else
-        if (m_FreezeWhenInactive)
-            m_frozen = TRUE;
+    if (gotit && m_TextViewEnabled)
+    {
+        SetFocus(m_hTextView);
+    }
 }
 
 BOOL BeebWin::IsFrozen(void)
@@ -4309,7 +4765,7 @@ void BeebWin::ParseCommandLine()
         else
         {
             invalid = false;
-            if (stricmp(__argv[i], "-Model") == 0)
+            if (_stricmp(__argv[i], "-Model") == 0)
             {
                 a = atoi(__argv[++i]);
                 if (a < 0 || a > 3)
@@ -4317,11 +4773,11 @@ void BeebWin::ParseCommandLine()
                 else
                     MachineType = a;
             }
-            else if (stricmp(__argv[i], "-Tube") == 0)
+            else if (_stricmp(__argv[i], "-Tube") == 0)
             {
                 TubeEnabled = atoi(__argv[++i]);
             }
-            else if (stricmp(__argv[i], "-EcoStn") == 0)
+            else if (_stricmp(__argv[i], "-EcoStn") == 0)
             {
                 a = atoi(__argv[++i]);
                 if (a < 1 || a > 254)
@@ -4329,7 +4785,7 @@ void BeebWin::ParseCommandLine()
                 else
                     EconetStationNumber = a;
             }
-            else if (stricmp(__argv[i], "-EcoFF") == 0)
+            else if (_stricmp(__argv[i], "-EcoFF") == 0)
             {
                 a = atoi(__argv[++i]);
                 if (a < 1)
@@ -4382,15 +4838,15 @@ void BeebWin::HandleCommandLineFile()
         if (ext != NULL)
         {
             cont = true;
-            if (stricmp(ext+1, "ssd") == 0)
+            if (_stricmp(ext+1, "ssd") == 0)
                 ssd = true;
-            else if (stricmp(ext+1, "dsd") == 0)
+            else if (_stricmp(ext+1, "dsd") == 0)
                 dsd = true;
-            else if (stricmp(ext+1, "adl") == 0)
+            else if (_stricmp(ext+1, "adl") == 0)
                 adfs = true;
-            else if (stricmp(ext+1, "adf") == 0)
+            else if (_stricmp(ext+1, "adf") == 0)
                 adfs = true;
-            else if (stricmp(ext+1, "uef") == 0)
+            else if (_stricmp(ext+1, "uef") == 0)
                 uef = true;
             else
                 cont = false;
@@ -4699,7 +5155,7 @@ void BeebWin::CaptureVideo()
             m_AviFrameSkipCount = 0;
 
             HRESULT hr = aviWriter->Initialise(FileName, wfp, &m_Avibmi,
-                            (m_FramesPerSecond > 46 ? 50 : m_FramesPerSecond) / (m_AviFrameSkip+1), m_hWnd);
+                (int)((m_FramesPerSecond > 46 ? 50 : m_FramesPerSecond) / (m_AviFrameSkip+1)), m_hWnd);
             if (FAILED(hr))
             {
                 MessageBox(m_hWnd, "Failed to create AVI file",
@@ -4740,4 +5196,659 @@ void BeebWin::QuickSave()
     }
 
     SaveUEFState(FileName2);
+}
+
+/****************************************************************************/
+void BeebWin::InitTextToSpeech(void)
+{
+    m_SpeechLine = 0;
+    m_SpeechCol = 0;
+    memset(m_SpeechText, 0, MAX_SPEECH_LINE_LEN+1);
+    m_SpeechSpeakPunctuation = false;
+    m_SpeechWriteChar = false;
+    m_SpeechBufPos = 0;
+    memset(m_SpeechBuf, 0, MAX_SPEECH_BUF_LEN+1);
+    m_SpeechBufPos = 0;
+
+    if (m_TextToSpeechEnabled && m_SpVoice == NULL)
+    {
+        HRESULT hr = CoCreateInstance(
+            CLSID_SpVoice, NULL, CLSCTX_ALL, IID_ISpVoice, (void **)&m_SpVoice);
+        if( FAILED( hr ) )
+        {
+            m_SpVoice = NULL;
+            m_TextToSpeechEnabled = 0;
+            MessageBox(m_hWnd,"Failed to initialise text-to-speech engine\n",
+                       WindowTitle,MB_OK|MB_ICONERROR);
+        }
+    }
+    CheckMenuItem(m_hMenu, IDM_TEXTTOSPEECH, m_TextToSpeechEnabled ? MF_CHECKED:MF_UNCHECKED);
+
+    if (m_TextToSpeechEnabled)
+    {
+        m_SpVoice->Speak(L"<SILENCE MSEC='800'/>BeebEm text to speech output enabled",
+                         SPF_ASYNC, NULL);
+    }
+}
+
+void BeebWin::Speak(const char *text, DWORD flags)
+{
+    if (m_TextToSpeechEnabled)
+    {
+        int len = MultiByteToWideChar(CP_ACP, 0, text, -1, 0, 0) + 1;
+        WCHAR *wtext = (WCHAR*)malloc(len * sizeof(WCHAR));
+        MultiByteToWideChar(CP_ACP, 0, text, -1, wtext, len);
+        m_SpVoice->Speak(wtext, SPF_ASYNC | SPF_IS_NOT_XML | flags, NULL);
+        free(wtext);
+    }
+}
+
+void BeebWin::SpeakChar(unsigned char c)
+{
+    if (m_SpeechWriteChar)
+    {
+        if (isprint(c))
+        {
+            m_SpeechBuf[m_SpeechBufPos++] = c;
+        }
+
+        if (m_SpeechBufPos > 0 &&
+            (m_SpeechBufPos == MAX_SPEECH_BUF_LEN ||
+             (c == '.' || c == '!' || c == '?' || c == '!' || c < 32 || c > 126) ))
+        {
+            m_SpeechBuf[m_SpeechBufPos] = '\0';
+            Speak(m_SpeechBuf, 0);
+            m_SpeechBufPos = 0;
+        }
+    }
+}
+
+#define IS_ENDSENTENCE(c) (c == '.' || c == '!' || c == '?')
+
+bool BeebWin::TextToSpeechSearch(TextToSpeechSearchDirection dir,
+                                 TextToSpeechSearchType type)
+{
+    bool done = false;
+    bool found = false;
+    int lastNonBlankLine = m_SpeechLine;
+    int lastNonBlankCol = m_SpeechCol;
+
+    VideoGetText(m_SpeechText, m_SpeechLine);
+
+    while (!done)
+    {
+        if (dir == TTS_FORWARDS)
+        {
+            if (m_SpeechCol < CRTC_HorizontalDisplayed-1)
+            {
+                ++m_SpeechCol;
+            }
+            else if (m_SpeechLine < CRTC_VerticalDisplayed-1)
+            {
+                ++m_SpeechLine;
+                VideoGetText(m_SpeechText, m_SpeechLine);
+                m_SpeechCol = 0;
+            }
+            else
+            {
+                done = true;
+                MessageBeep(-1);
+            }
+        }
+        else // Backwards
+        {
+            if (m_SpeechCol > 0)
+            {
+                --m_SpeechCol;
+            }
+            else if (m_SpeechLine > 0)
+            {
+                --m_SpeechLine;
+                VideoGetText(m_SpeechText, m_SpeechLine);
+                m_SpeechCol = (int)(strlen(m_SpeechText) - 1);
+                if (m_SpeechCol < 0)
+                    m_SpeechCol = 0;
+            }
+            else
+            {
+                done = true;
+                MessageBeep(-1);
+            }
+        }
+
+        if (m_SpeechText[m_SpeechCol] != ' ')
+        {
+            lastNonBlankLine = m_SpeechLine;
+            lastNonBlankCol = m_SpeechCol;
+        }
+
+        if (!done)
+        {
+            switch (type)
+            {
+            case TTS_CHAR:
+                done = true;
+                found = true;
+                break;
+
+            case TTS_BLANK:
+                if (m_SpeechText[m_SpeechCol] == ' ')
+                {
+                    done = true;
+                    found = true;
+                }
+                break;
+            case TTS_NONBLANK:
+                if (m_SpeechText[m_SpeechCol] != ' ')
+                {
+                    done = true;
+                    found = true;
+                }
+                break;
+            case TTS_ENDSENTENCE:
+                if (IS_ENDSENTENCE(m_SpeechText[m_SpeechCol]))
+                {
+                    done = true;
+                    found = true;
+                }
+                break;
+            }
+        }
+    }
+
+    if (!found)
+    {
+        m_SpeechLine = lastNonBlankLine;
+        m_SpeechCol = lastNonBlankCol;
+    }
+
+    return found;
+}
+
+void BeebWin::TextToSpeechReadChar(void)
+{
+    char text[MAX_SPEECH_LINE_LEN+1];
+    if (m_SpeechText[m_SpeechCol] == ' ')
+    {
+        strcpy(text, "space");
+    }
+    else
+    {
+        text[0] = m_SpeechText[m_SpeechCol];
+        text[1] = '\0';
+    }
+    Speak(text, SPF_PURGEBEFORESPEAK | SPF_NLP_SPEAK_PUNC);
+}
+
+void BeebWin::TextToSpeechReadWord(void)
+{
+    char text[MAX_SPEECH_LINE_LEN+1];
+    int i = 0;
+    for (int c = m_SpeechCol; m_SpeechText[c] != 0 && m_SpeechText[c] != ' '; ++c)
+    {
+        text[i++] = m_SpeechText[c];
+    }
+    text[i] = 0;
+    if (i == 0)
+        strcpy(text, "blank");
+    Speak(text, SPF_PURGEBEFORESPEAK |
+          (m_SpeechSpeakPunctuation ? SPF_NLP_SPEAK_PUNC : 0));
+}
+
+void BeebWin::TextToSpeechReadLine(void)
+{
+    char text[MAX_SPEECH_LINE_LEN+1];
+    bool blank = true;
+    strcpy(text, m_SpeechText);
+    for (int c = 0; text[c] != 0; ++c)
+    {
+        if (text[c] != ' ')
+        {
+            blank = false;
+            break;
+        }
+    }
+    if (blank)
+        strcpy(text, "blank");
+
+    Speak(text, SPF_PURGEBEFORESPEAK |
+          (m_SpeechSpeakPunctuation ? SPF_NLP_SPEAK_PUNC : 0));
+}
+
+void BeebWin::TextToSpeechReadSentence(void)
+{
+    char text[MAX_SPEECH_SENTENCE_LEN+1];
+    char textLine[MAX_SPEECH_LINE_LEN+1];
+    int line = m_SpeechLine;
+    int col = m_SpeechCol;
+    bool blank = true;
+    bool done = false;
+    int i = 0;
+
+    while (!done)
+    {
+        VideoGetText(textLine, line);
+        for (int c = col; textLine[c] != 0; ++c)
+        {
+            text[i++] = textLine[c];
+            if (textLine[c] != ' ')
+                blank = false;
+
+            if (IS_ENDSENTENCE(textLine[c]))
+            {
+                done = true;
+                break;
+            }
+        }
+        if (!done)
+        {
+            if (line < CRTC_VerticalDisplayed-1)
+            {
+                line++;
+                col = 0;
+            }
+            else
+            {
+                done = true;
+            }
+        }
+    }
+    text[i] = 0;
+
+    if (blank)
+        strcpy(text, "blank");
+
+    Speak(text, SPF_PURGEBEFORESPEAK |
+          (m_SpeechSpeakPunctuation ? SPF_NLP_SPEAK_PUNC : 0));
+}
+
+void BeebWin::TextToSpeechReadScreen(void)
+{
+    char text[MAX_SPEECH_SCREEN_LEN+1];
+    bool blank = true;
+    int i = 0;
+
+    for (m_SpeechLine = 0; m_SpeechLine < CRTC_VerticalDisplayed-1; ++m_SpeechLine)
+    {
+        VideoGetText(m_SpeechText, m_SpeechLine);
+        for (int c = 0; m_SpeechText[c] != 0; ++c)
+        {
+            text[i++] = m_SpeechText[c];
+            if (m_SpeechText[c] != ' ')
+                blank = false;
+        }
+    }
+    text[i] = 0;
+
+    if (blank)
+        strcpy(text, "blank");
+
+    Speak(text, SPF_PURGEBEFORESPEAK |
+          (m_SpeechSpeakPunctuation ? SPF_NLP_SPEAK_PUNC : 0));
+}
+
+void BeebWin::TextToSpeechKey(WPARAM uParam)
+{
+    char text[MAX_SPEECH_LINE_LEN+1];
+    bool found;
+
+    if (!TeletextEnabled &&
+        uParam != VK_NUMPAD0 && uParam != VK_INSERT &&
+        uParam != VK_END && uParam != VK_NUMPAD1)
+    {
+        Speak("Not in text mode.", SPF_PURGEBEFORESPEAK);
+    }
+    else
+    {
+        int s = GetKeyState(VK_MENU);
+        bool altPressed = (GetKeyState(VK_MENU) < 0);
+        bool insPressed = (GetKeyState(VK_INSERT) < 0) || (GetKeyState(VK_NUMPAD0) < 0);
+
+        // Check that current position is still on screen
+        if (m_SpeechCol >= CRTC_HorizontalDisplayed)
+            m_SpeechCol = CRTC_HorizontalDisplayed-1;
+        if (m_SpeechLine >= CRTC_VerticalDisplayed)
+            m_SpeechLine = CRTC_VerticalDisplayed;
+
+        VideoGetText(m_SpeechText, m_SpeechLine);
+
+        // Key assignments are based on the keys used by the
+        // Freedom Scientific JAWS package.
+        switch (uParam)
+        {
+        case VK_CLEAR:
+        case VK_HOME:
+        case VK_NUMPAD5:
+        case VK_NUMPAD7:
+            if (insPressed)
+            {
+                // Speak current word
+                if (m_SpeechText[m_SpeechCol] != ' ')
+                    TextToSpeechSearch(TTS_BACKWARDS, TTS_BLANK);
+                if (m_SpeechText[m_SpeechCol] == ' ')
+                    TextToSpeechSearch(TTS_FORWARDS, TTS_NONBLANK);
+
+                TextToSpeechReadWord();
+            }
+            else if (altPressed)
+            {
+                // Speak current sentence
+                found = TextToSpeechSearch(TTS_BACKWARDS, TTS_ENDSENTENCE);
+                if (found || m_SpeechText[m_SpeechCol] == ' ')
+                    TextToSpeechSearch(TTS_FORWARDS, TTS_NONBLANK);
+
+                TextToSpeechReadSentence();
+            }
+            else
+            {
+                // Speak current character
+                TextToSpeechReadChar();
+            }
+            break;
+
+        case VK_LEFT:
+        case VK_NUMPAD4:
+            if (insPressed)
+            {
+                // Speak previous word
+                if (m_SpeechText[m_SpeechCol] != ' ')
+                    TextToSpeechSearch(TTS_BACKWARDS, TTS_BLANK);
+                TextToSpeechSearch(TTS_BACKWARDS, TTS_NONBLANK);
+
+                // Now speak current word
+                TextToSpeechKey(VK_CLEAR);
+            }
+            else
+            {
+                // Speak previous character
+                TextToSpeechSearch(TTS_BACKWARDS, TTS_CHAR);
+                TextToSpeechReadChar();
+            }
+            break;
+
+        case VK_RIGHT:
+        case VK_NUMPAD6:
+            if (insPressed)
+            {
+                // Speak next word
+                if (m_SpeechText[m_SpeechCol] != ' ')
+                    TextToSpeechSearch(TTS_FORWARDS, TTS_BLANK);
+
+                // Now speak current word
+                TextToSpeechKey(VK_CLEAR);
+            }
+            else
+            {
+                // Speak next character
+                TextToSpeechSearch(TTS_FORWARDS, TTS_CHAR);
+                TextToSpeechReadChar();
+            }
+            break;
+
+        case VK_UP:
+        case VK_NUMPAD8:
+            if (insPressed)
+            {
+                // Read current line
+                TextToSpeechReadLine();
+            }
+            else if (altPressed)
+            {
+                // Read previous sentence
+                TextToSpeechSearch(TTS_BACKWARDS, TTS_ENDSENTENCE);
+
+                // Now speak current sentence
+                TextToSpeechKey(VK_CLEAR);
+            }
+            else
+            {
+                // Read previous line
+                if (m_SpeechLine > 0)
+                {
+                    --m_SpeechLine;
+                    VideoGetText(m_SpeechText, m_SpeechLine);
+                    TextToSpeechReadLine();
+                }
+                else
+                {
+                    MessageBeep(-1);
+                }
+            }
+            break;
+
+        case VK_DOWN:
+        case VK_NUMPAD2:
+            if (insPressed)
+            {
+                // Read entire screen
+                TextToSpeechReadScreen();
+            }
+            else if (altPressed)
+            {
+                // Read next sentence
+                found = TextToSpeechSearch(TTS_FORWARDS, TTS_ENDSENTENCE);
+                if (found)
+                    TextToSpeechSearch(TTS_FORWARDS, TTS_NONBLANK);
+
+                TextToSpeechReadSentence();
+            }
+            else
+            {
+                // Read next line
+                if (m_SpeechLine < CRTC_VerticalDisplayed-1)
+                {
+                    ++m_SpeechLine;
+                    VideoGetText(m_SpeechText, m_SpeechLine);
+                    TextToSpeechReadLine();
+                }
+                else
+                {
+                    MessageBeep(-1);
+                }
+            }
+            break;
+
+        case VK_PRIOR:
+        case VK_NUMPAD9:
+            if (insPressed)
+            {
+                // Output current cursor location
+                sprintf(text, "Line %d column %d", m_SpeechLine, m_SpeechCol);
+                Speak(text, SPF_PURGEBEFORESPEAK);
+            }
+            else
+            {
+                // Go to top of screen
+                m_SpeechLine = 0;
+                m_SpeechCol = 0;
+            }
+            break;
+
+        case VK_END:
+        case VK_NUMPAD1:
+            if (insPressed)
+            {
+                // Toggle text to speech for all text writes through WRCHV
+                m_SpeechWriteChar = !m_SpeechWriteChar;
+                if (m_SpeechWriteChar)
+                    Speak("Writes to screen enabled.", SPF_PURGEBEFORESPEAK);
+                else
+                    Speak("Writes to screen disabled.", SPF_PURGEBEFORESPEAK);
+                m_SpeechBufPos = 0;
+            }
+            else
+            {
+                // Flush buffered speech
+                SpeakChar(13);
+            }
+            break;
+
+        case VK_NEXT:
+        case VK_NUMPAD3:
+            if (insPressed)
+            {
+                // Toggle speaking of punctuation
+                m_SpeechSpeakPunctuation = !m_SpeechSpeakPunctuation;
+                if (m_SpeechSpeakPunctuation)
+                    Speak("Speak puntuation enabled.", SPF_PURGEBEFORESPEAK);
+                else
+                    Speak("Speak puntuation disabled.", SPF_PURGEBEFORESPEAK);
+            }
+            else
+            {
+                // Go to bottom of screen
+                m_SpeechLine = CRTC_VerticalDisplayed-1;
+                m_SpeechCol = 0;
+            }
+            break;
+        }
+    }
+}
+
+/****************************************************************************/
+static WNDPROC TextViewPrevWndProc;
+LRESULT TextViewWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+    bool keypress = false;
+
+    switch (msg)
+    {
+    case WM_KEYDOWN:
+    case WM_KEYUP:
+    case WM_SYSKEYDOWN:
+    case WM_SYSKEYUP:
+        SendMessage(mainWin->GethWnd(), msg, wParam, lParam);
+        keypress = true;
+        break;
+    }
+    LRESULT lr = CallWindowProc(TextViewPrevWndProc, hWnd, msg, wParam, lParam);
+
+    if (keypress)
+        mainWin->TextViewSpeechSync();
+
+    return lr;
+}
+
+void BeebWin::InitTextView(void)
+{
+    if (m_hTextView != NULL)
+    {
+        DestroyWindow(m_hTextView);
+        m_hTextView = NULL;
+    }
+    m_TextViewScreen[0] = 0;
+
+    if (m_TextViewEnabled)
+    {
+        RECT rc;
+        GetClientRect(m_hWnd, &rc);
+        m_hTextView = CreateWindow("EDIT", "TextView",
+            WS_CHILD | WS_VISIBLE | ES_READONLY | ES_MULTILINE | ES_LEFT,
+            0, 0, rc.right, rc.bottom, m_hWnd,
+            NULL, hInst, NULL);
+        if (m_hTextView == NULL)
+        {
+            m_TextViewEnabled = 0;
+        }
+        else
+        {
+            SendMessage(m_hTextView, WM_SETFONT,
+                        (WPARAM)GetStockObject(ANSI_FIXED_FONT), 0);
+
+            LONG_PTR lPtr = GetWindowLongPtr(m_hTextView, GWL_WNDPROC);
+            TextViewPrevWndProc = (WNDPROC)lPtr;
+            lPtr = reinterpret_cast<LONG_PTR>(TextViewWndProc);
+            #pragma warning (disable:4244)
+            SetWindowLongPtr(m_hTextView, GWL_WNDPROC, lPtr);
+            SetFocus(m_hTextView);
+        }
+    }
+
+    CheckMenuItem(m_hMenu, IDM_TEXTVIEW, m_TextViewEnabled ? MF_CHECKED:MF_UNCHECKED);
+}
+
+void BeebWin::TextView(void)
+{
+    char text[MAX_SPEECH_LINE_LEN+1];
+    char screen[MAX_TEXTVIEW_SCREEN_LEN+1];
+    char *s = screen;
+    int line;
+
+    int selpos = (int)SendMessage(m_hTextView, EM_GETSEL, 0, 0) & 0xffff;
+
+    if (TeletextEnabled)
+    {
+        for (line = 0; line < CRTC_VerticalDisplayed; ++line)
+        {
+            VideoGetText(text, line);
+            strcpy(s, text);
+            strcat(s, "\r\n");
+            s += strlen(s);
+        }
+    }
+    else
+    {
+        strcpy(screen, "Not in text mode.");
+    }
+
+    if (strcmp(m_TextViewScreen, screen) != 0)
+    {
+        strcpy(m_TextViewScreen, screen);
+        SendMessage(m_hTextView, WM_SETTEXT, 0, (LPARAM)m_TextViewScreen);
+        SendMessage(m_hTextView, EM_SETSEL, selpos, selpos);
+        TextViewSpeechSync();
+    }
+}
+
+void BeebWin::TextViewSpeechSync(void)
+{
+    if (m_TextToSpeechEnabled)
+        TextViewSetCursorPos(m_SpeechLine, m_SpeechCol);
+}
+
+void BeebWin::TextViewSetCursorPos(int line, int col)
+{
+    int selpos = (CRTC_HorizontalDisplayed+2) * line + col;
+    SendMessage(m_hTextView, EM_SETSEL, selpos, selpos);
+}
+
+void BeebWin::TextViewSyncWithBeebCursor(void)
+{
+    // Move speech cursor to Beeb's cursor pos
+    int CurAddr = CRTC_CursorPosLow+(((CRTC_CursorPosHigh ^ 0x20) + 0x74 & 0xff)<<8);
+    int ScrAddr = CRTC_ScreenStartLow+(((CRTC_ScreenStartHigh ^ 0x20) + 0x74 & 0xff)<<8);
+    int RelAddr = CurAddr - ScrAddr;
+    m_SpeechLine = RelAddr / CRTC_HorizontalDisplayed;
+    m_SpeechCol = RelAddr % CRTC_HorizontalDisplayed;
+    if (m_TextViewEnabled)
+        TextViewSetCursorPos(m_SpeechLine, m_SpeechCol);
+}
+
+/****************************************************************************/
+BOOL BeebWin::RebootSystem(void)
+{
+    HANDLE hToken;
+    TOKEN_PRIVILEGES tkp;
+
+    if (!OpenProcessToken(GetCurrentProcess(),
+                          TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &hToken))
+        return( FALSE );
+
+    LookupPrivilegeValue(NULL, SE_SHUTDOWN_NAME,
+                         &tkp.Privileges[0].Luid);
+
+    tkp.PrivilegeCount = 1;  // one privilege to set
+    tkp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
+    AdjustTokenPrivileges(hToken, FALSE, &tkp, 0,
+                          (PTOKEN_PRIVILEGES)NULL, 0);
+    if (GetLastError() != ERROR_SUCCESS)
+        return FALSE;
+
+    if (!ExitWindowsEx(EWX_REBOOT | EWX_FORCE,
+                       SHTDN_REASON_MAJOR_OPERATINGSYSTEM |
+                       SHTDN_REASON_MINOR_RECONFIG |
+                       SHTDN_REASON_FLAG_PLANNED))
+        return FALSE;
+
+    return TRUE;
 }

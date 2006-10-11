@@ -73,4 +73,33 @@ void PrinterDisable();
 extern int PrinterTrigger;
 void PrinterPoll();
 
+/* User Port Breakout Box */
+
+void GetBitKeysUsed( char *Keys );
+extern int  BitKey;         // Used to store the bit key pressed while we wait
+void ShowBitKey(int key, int ctrlID);
+char *BitKeyName( int Key );
+void SetBitKey( int ctrlID );
+int GetValue(int ctrlID);
+void SetValue(int ctrlID, int State);
+extern int BitKeys[8];
+extern int LastBitButton;
+extern bool mBreakOutWindow;
+
+void ShowInputs(unsigned char data);
+void ShowOutputs(unsigned char data);
+
+void BreakOutOpenDialog(HINSTANCE hinst, HWND hwndMain);
+void BreakOutCloseDialog();
+HWND    PromptForBitKeyInput( HWND hwndParent, UINT ctrlID );
+BOOL    CALLBACK BreakOutDlgProc( HWND   hwnd,
+                                       UINT   nMessage,
+                                       WPARAM wParam,
+                                       LPARAM lParam );
+LRESULT CALLBACK GetBitKeyWndProc( HWND hWnd,
+                                UINT message,
+                                WPARAM uParam,
+                                LPARAM lParam);
+
+
 #endif

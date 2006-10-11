@@ -26,23 +26,24 @@
 #include <stdlib.h>
 #include <windows.h>
 #include <ddraw.h>
+#include <sapi.h>
 #include "port.h"
 #include "video.h"
 
 /* Used in message boxes */
 #define GETHWND (mainWin == NULL ? NULL : mainWin->GethWnd())
 
-typedef union {
+typedef union EightUChars {
     unsigned char data[8];
   EightByteType eightbyte;
 } EightUChars;
 
-typedef union {
+typedef union SixteenUChars {
     unsigned char data[16];
   EightByteType eightbytes[2];
 } SixteenUChars;
 
-typedef struct
+typedef struct bmiData
 {
   BITMAPINFOHEADER  bmiHeader;
   RGBQUAD           bmiColors[256];
@@ -58,6 +59,20 @@ struct LEDType {
     bool ShowKB;
 };
 extern struct LEDType LEDs;
+
+enum TextToSpeechSearchDirection
+{
+    TTS_FORWARDS,
+    TTS_BACKWARDS
+};
+
+enum TextToSpeechSearchType
+{
+    TTS_CHAR,
+    TTS_BLANK,
+    TTS_NONBLANK,
+    TTS_ENDSENTENCE
+};
 
 class BeebWin  {
 
@@ -144,6 +159,7 @@ class BeebWin  {
     void ScaleMousestick(unsigned int x, unsigned int y);
     void HandleCommand(int MenuId);
     void SetAMXPosition(unsigned int x, unsigned int y);
+    void Activate(BOOL);
     void Focus(BOOL);
     BOOL IsFrozen(void);
     void ShowMenu(bool on);
@@ -158,6 +174,11 @@ class BeebWin  {
     const char *GetAppPath(void) { return m_AppPath; }
     void QuickLoad(void);
     void QuickSave(void);
+    void Speak(const char *text, DWORD flags);
+    void SpeakChar(unsigned char c);
+    void TextToSpeechKey(WPARAM uParam);
+    void TextViewSpeechSync(void);
+    void TextViewSyncWithBeebCursor(void);
 
     unsigned char cols[256];
     HMENU       m_hMenu;
@@ -166,6 +187,12 @@ class BeebWin  {
     char*       m_screen_blur;
     double      m_RealTimeTarget;
     int         m_ShiftBooted;
+    char        m_TextToSpeechEnabled;
+    char        m_TextViewEnabled;
+    char        m_DisableKeysWindows;
+    char        m_DisableKeysBreak;
+    char        m_DisableKeysEscape;
+    char        m_DisableKeysShortcut;
 
   private:
     int         m_MenuIdWinSize;
@@ -253,6 +280,25 @@ class BeebWin  {
     BOOL                    m_DDS2InVideoRAM;
     LPDIRECTDRAWCLIPPER     m_Clipper;      // clipper for primary
 
+    // Text to speech variables
+    ISpVoice *m_SpVoice;
+    int m_SpeechLine;
+    int m_SpeechCol;
+    static const int MAX_SPEECH_LINE_LEN = 128;
+    static const int MAX_SPEECH_SENTENCE_LEN = 128*25;
+    static const int MAX_SPEECH_SCREEN_LEN = 128*32;
+    char m_SpeechText[MAX_SPEECH_LINE_LEN+1];
+    bool m_SpeechSpeakPunctuation;
+    bool m_SpeechWriteChar;
+    static const int MAX_SPEECH_BUF_LEN = 160;
+    char m_SpeechBuf[MAX_SPEECH_BUF_LEN+1];
+    int m_SpeechBufPos;
+
+    // Text view variables
+    HWND m_hTextView;
+    static const int MAX_TEXTVIEW_SCREEN_LEN = 128*32;
+    char m_TextViewScreen[MAX_TEXTVIEW_SCREEN_LEN+1];
+
     BOOL InitClass(void);
     void UpdateOptiMenu(void);
     void CreateBeebWindow(void);
@@ -262,6 +308,7 @@ class BeebWin  {
     void UpdateSerialMenu(HMENU hMenu);
     void UpdateEconetMenu(HMENU hMenu);
     void UpdateSFXMenu();
+    void UpdateDisableKeysMenu();
     void InitDirectX(void);
     HRESULT InitSurfaces(void);
     void ResetSurfaces(void);
@@ -278,6 +325,7 @@ class BeebWin  {
     void RestoreState(void);
     void SaveState(void);
     void NewDiscImage(int Drive);
+    void EjectDiscImage(int Drive);
     void ToggleWriteProtect(int Drive);
     void LoadPreferences(void);
     void SavePreferences(void);
@@ -288,6 +336,18 @@ class BeebWin  {
     void TranslatePrinterPort(void);
     void SaveWindowPos(void);
     void CaptureVideo(void);
+    void InitTextToSpeech(void);
+    bool TextToSpeechSearch(TextToSpeechSearchDirection dir,
+                            TextToSpeechSearchType type);
+    void TextToSpeechReadChar(void);
+    void TextToSpeechReadWord(void);
+    void TextToSpeechReadLine(void);
+    void TextToSpeechReadSentence(void);
+    void TextToSpeechReadScreen(void);
+    void InitTextView(void);
+    void TextView(void);
+    void TextViewSetCursorPos(int line, int col);
+    BOOL RebootSystem(void);
 
 }; /* BeebWin */
 

@@ -529,6 +529,10 @@ unsigned char ReadTubeFromParasiteSide(unsigned char IOAddr) {
         break;
     case 4:
         TmpData=R3PStatus;
+        // Tube Spec says top bit in R3PStatus has value 'N', which looks like it is
+        // the same as the PNMI status (i.e. H->P data available OR P->H not full).
+        if (R3PHPtr == 0)
+            TmpData |= 128;
         break;
     case 5:
         TmpData=R3HPData[0];
@@ -1464,11 +1468,11 @@ void Exec65C02Instruction(void) {
   // For the Master, check Shadow Ram Presence
   // Note, this has to be done BEFORE reading an instruction due to Bit E and the PC
   /* Read an instruction and post inc program couter */
+  OldPC=TubeProgramCounter;
   CurrentInstruction=TubeRam[TubeProgramCounter++];
   // cout << "Fetch at " << hex << (TubeProgramCounter-1) << " giving 0x" << CurrentInstruction << dec << "\n";
   TubeCycles=TubeCyclesTable[CurrentInstruction];
   /*Stats[CurrentInstruction]++; */
-  OldPC=TubeProgramCounter;
   Branched=0;
   switch (CurrentInstruction) {
     case 0x00:
@@ -2448,8 +2452,8 @@ void Exec65C02Instruction(void) {
     if (Branched)
     {
       TubeCycles++;
-      if ((TubeProgramCounter & 0xff00) != (OldPC & 0xff00))
-        TubeCycles+=2;
+      if ((TubeProgramCounter & 0xff00) != ((OldPC+2) & 0xff00))
+        TubeCycles+=1;
     }
   }
 

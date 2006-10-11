@@ -939,7 +939,7 @@ int Disc8271_read(int Address) {
 
     case 1:
       /*cerr << "8271 Result register read (0x" << hex << int(ResultReg) << dec << ")\n"; */
-      StatusReg &=~18; /* Clear interrupt request  and result reg full flag*/
+      StatusReg &=~0x18; /* Clear interrupt request  and result reg full flag*/
       UPDATENMISTATUS;
       Value=ResultReg;
       ResultReg=0; /* Register goes to 0 after its read */
@@ -1263,6 +1263,12 @@ void LoadSimpleDSDiscImage(char *FileName, int DriveNum,int Tracks) {
 #endif
   }
 };  /* LoadSimpleDSDiscImage */
+
+/*--------------------------------------------------------------------------*/
+void Eject8271DiscImage(int DriveNum) {
+  strcpy(FileNames[DriveNum], "");
+  FreeDiscImage(DriveNum);
+}
 
 /*--------------------------------------------------------------------------*/
 static void SaveTrackImage(int DriveNum, int HeadNum, int TrackNum) {
@@ -1680,7 +1686,7 @@ void Load8271UEF(FILE *SUEF)
         // Load drive 0
         Loaded=1;
         ext = strrchr(FileName, '.');
-        if (ext != NULL && stricmp(ext+1, "dsd") == 0)
+        if (ext != NULL && _stricmp(ext+1, "dsd") == 0)
             LoadSimpleDSDiscImage(FileName, 0, 80);
         else
             LoadSimpleDiscImage(FileName, 0, 0, 80);
@@ -1694,7 +1700,7 @@ void Load8271UEF(FILE *SUEF)
         // Load drive 1
         Loaded=1;
         ext = strrchr(FileName, '.');
-        if (ext != NULL && stricmp(ext+1, "dsd") == 0)
+        if (ext != NULL && _stricmp(ext+1, "dsd") == 0)
             LoadSimpleDSDiscImage(FileName, 1, 80);
         else
             LoadSimpleDiscImage(FileName, 1, 0, 80);

@@ -114,6 +114,7 @@ int ova,ovn; // mem ptr buffers
 the point of the sync. If it is -ve its actually in the adjust time */
 typedef struct {
   int Addr;       /* Address of start of next visible character line in beeb memory  - raw */
+  int StartAddr;  /* Address of start of first character line in beeb memory  - raw */
   int PixmapLine; /* Current line in the pixmap */
   int FirstPixmapLine; /* The first pixmap line where something is visible.  Used to eliminate the
                           blank virtical retrace lines at the top of the screen.  */
@@ -606,14 +607,14 @@ static void VideoStartOfFrame(void) {
 
   VideoState.IsTeletext=(VideoULA_ControlReg &2)>0;
   if (!VideoState.IsTeletext) {
-    VideoState.Addr=CRTC_ScreenStartLow+(CRTC_ScreenStartHigh<<8);
+    VideoState.Addr=VideoState.StartAddr=CRTC_ScreenStartLow+(CRTC_ScreenStartHigh<<8);
   } else {
     int tmphigh=CRTC_ScreenStartHigh;
     /* undo wrangling of start address - I don't understand why this should be - see p.372 of AUG for this info */
     tmphigh^=0x20;
     tmphigh+=0x74;
     tmphigh&=255;
-    VideoState.Addr=CRTC_ScreenStartLow+(tmphigh<<8);
+    VideoState.Addr=VideoState.StartAddr=CRTC_ScreenStartLow+(tmphigh<<8);
 
     // O aye. this is the mode 7 flash section is it? Modified for corrected flash settings - Richard Gellman
     Mode7FlashTrigger--;
@@ -1480,4 +1481,31 @@ void DebugVideoState()
         (int)CRTC_CursorPosLow,
         (int)VideoULA_ControlReg);
     DebugDisplayInfo(info);
+}
+
+/*-------------------------------------------------------------------------*/
+void VideoGetText(char *text, int line)
+{
+    unsigned char c;
+    int x;
+
+    text[0] = 0;
+    text[1] = 0;
+
+    if (!VideoState.IsTeletext || line >= CRTC_VerticalDisplayed)
+        return;
+
+    char *dataPtr = BeebMemPtrWithWrapMo7(
+        VideoState.StartAddr + line * CRTC_HorizontalDisplayed,
+        CRTC_HorizontalDisplayed);
+
+    for (x = 0; x < CRTC_HorizontalDisplayed; ++x)
+    {
+        c = dataPtr[x];
+        if (isprint(c))
+            text[x] = c;
+        else
+            text[x] = ' ';
+    }
+    text[x] = '\0';
 }

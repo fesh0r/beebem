@@ -734,7 +734,7 @@ bool EconetPoll_real(void) {        //return NMI status
                     timeval TmOut = {0,0};
                     FD_ZERO(&RdFds);
                     FD_SET(ListenSocket, &RdFds);
-                    RetVal = select(ListenSocket + 1, &RdFds, NULL, NULL, &TmOut);
+                    RetVal = select((int)ListenSocket + 1, &RdFds, NULL, NULL, &TmOut);
                     if (RetVal > 0)
                     {
                         // Read the packet

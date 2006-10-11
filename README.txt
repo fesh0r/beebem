@@ -110,6 +110,10 @@ not remove these:
  BBC Model B Plus     - B+MOS.ROM, BASIC2.ROM, WDFS.ROM
  Master 128           - MOS.ROM, TERMINAL.ROM, BASIC4.ROM, DFS.ROM
 
+The default set of ROMs configured for the Master 128 mode are MOS 3.20.
+The MOS 3.50 ROMs are also included.  To use them rename the BeebFile/M128
+directory to M128-MOS3.2 and rename the M128-MOS3.5 directory M128.
+
 
 Keyboard Mappings
 -----------------
@@ -187,7 +191,8 @@ image (such as the MasterWelcome.adl image in discims) and type '*ADFS' to
 mount it.  You can also press A & F12 to mount an ADFS disc.
 
 ADFS is also supported in Model B and B Plus modes.  Note that in Model B
-mode you will need to select the Acorn 1770 disc controller.
+mode you will need to select the Acorn 1770 disc controller and add
+ADFS-1.30.rom to Roms.cfg.
 
 You can find out more information about using discs by reading the DFS (Disc
 Filing System) guides available on the internet.
@@ -228,10 +233,12 @@ SCSI & SASI Disk Support
 
 BeebEm supports emulated SCSI and SASI hard disks.  There are 4 10MB
 pre-formatted ADFS SCSI disk images in the discims directory (the scsi?.dat
-files).  The disks can be used in Model B, B Plus or Master 128 mode.  To
-use the disk images press A & F12 to boot in ADFS mode (ignore the error for
-drive 4 if in Master mode).  The hard disks then appear as drives 0 to 3.
-Floppy disks can still be accessed as drives 4 and 5.
+files).  The disks can be used in Model B (need to add ADFS-1.30.rom to
+Roms.cfg), B Plus or Master 128 mode.  To use the disk images enable hard
+drive emulation on the hardware menu and press A & F12 to boot in ADFS mode
+(ignore the error for drive 4 if in Master mode).  The hard disks then
+appear as drives 0 to 3.  Floppy disks can still be accessed as drives 4 and
+5.
 
 There are some demo tunes in scsi0.dat which you can listen to with the PLAY
 program.
@@ -432,6 +439,9 @@ some sample teletext data from :
 
 http://www.g7jjf.com/teletext.htm
 
+You will need to add the ATS-3.0-1.rom to Roms.cfg and enable Teletext
+emulation on the hardware menu to get Teletext to work.
+
 
 Speech Generator
 ----------------
@@ -495,6 +505,9 @@ File Menu:
                  have a standard 31 file catalogue by default.  If you want
                  a 62 file catalogue (Watford DFS) then format the disc.
 
+  Eject Disc 0 - Ejects the disc image currently loaded.  The name of the
+  Eject Disc 1   file currently loaded is shown next to the menu option.
+
   Write Protect 0 - Toggles write protection for drive 0 or 1.  Keep discs
   Write Protect 1   write protected unless you intend to write to them.
                     Also see the WARNING above in the 'Using Disc Images'
@@ -555,6 +568,8 @@ Comms Menu:
                         or off.
 
   RS423 Destination   - Select where to send the serial port data.
+                        Select Microvitec Touch Screen to enable touch
+                        screen support.
 
 View Menu:
 
@@ -597,6 +612,10 @@ View Menu:
                         HKEY_CURRENT_USER\Software\BeebEm\
                                                 MotionBlurIntensities
 
+  Screen Reader Text View - Switch screen reader compatible text view
+                            on or off (see features for visually impaired
+                            users below)
+
 Speed Menu:
 
   Real Time    - Runs BeebEm at the same speed as a real BBC Micro.
@@ -637,6 +656,13 @@ Sound Menu:
 
   Part Samples   - Smooths sound sampling.  Using part samples usually
                    sounds better.
+
+  Exponential Volume - Enables an exponential volume scale.  Makes the
+                       sound output better.
+
+
+  Text To Speech - Switch text to speech generation on or off (see features
+                   for visually impaired users below)
 
 AMX Menu:
 
@@ -710,13 +736,26 @@ Hardware Menu:
   Econet On/Off       - Switch Econet emulation on or off.  See the Econet
                         section above for more details.
 
+  Teletext On/Off     - Switch Teletext emulation on or off.  See the
+                        Teletext section above for more details.
+
+  Hard Drive On/Off   - Switch SCSI/SASI hard drive emulation on or off.
+                        See the SCSI/SASI section above for more details.
+
+  User Port Breakout Box - Opens the user port breakout box dialog.  The
+                        breakout box allows keys to be assigned for switch
+                        box emulation.
+
 Options Menu:
 
   Joystick             - Switch on or off PC/Beeb analogue joystick support.
                          Calibrate the joystick through the control panel.
 
-  Mousestick           - Switch on or off the mapping of Mouse position to
-                         Beeb joystick.
+  Analogue Mousestick  - Switch on or off the mapping of Mouse position to
+                         analogue Beeb joystick position.
+
+  Digital Mousestick   - Switch on or off the mapping of Mouse movements to
+                         digital Beeb joystick movements.
 
   Freeze when inactive - When selected BeebEm will freeze when you switch
                          to another Window.
@@ -744,6 +783,11 @@ Options Menu:
 
   Map F1-F10 to f0-f9  - Selects a slightly different mapping for the
                          function keys.
+
+  Disable Keys         - Allows you to disable selected keys within BeebEm.
+                         The Windows (start) keys can also be disabled but
+                         note that this affects all Windows applications,
+                         not just BeebEm.
 
   Debugger             - Opens the debugger window (see below).
 
@@ -823,10 +867,19 @@ sv                   - Show video registers.
 su                   - Show user via registers.
 ss                   - Show system via registers.
 st                   - Show tube registers.
+w file [count]       - Writes the last [count] lines of the debug window
+                       to a file.  If count is not specified the entire
+                       debug window contents are written.
+                         e.g. w /disassembly.txt 64
+c start byte [byte] ... - Change memory.  Writes bytes starting at a
+                          particular address.
+                         e.g. c 7c00 68 65 6c 6c 6f
+
+NOTE: All values are specified in hex!
 
 The disassembler shows the following information:
 
-  Address OPCodes Instruction A X Y Flags
+  Address OPCodes Instruction A X Y SR Flags
 
 Parasite instructions are shifted right so it easier to follow both host and
 parasite when debugging tube code.
@@ -892,6 +945,76 @@ Master 128 Specific hardware:
 
 For information on the IntegraB see the documentation in the 'Documents'
 directory.
+
+
+Features for Visually Impaired Users
+------------------------------------
+
+BeebEm provides two features for use by visually impaired users:
+
+1. A screen reader compatible text view.
+
+2. Text to speech generation.
+
+The screen reader compatible text view can be selected from the view menu.
+When enabled the text on the BeebEm screen is converted to a standard
+Windows text edit control.  Screen readers such as JAWS can move the edit
+cursor around the screen and read the text in the control.  Note that BeebEm
+can only convert text when in teletext mode 7.  In other modes the text edit
+will contain the string "Not in text mode."  A special key press, ALT + `
+(back quote) is available to synchronise the cursor position in the text
+view with the BBC Micro cursor position.
+
+The BeebEm text to speech generation can be selected from the sound menu.
+When enabled BeebEm will use the text to speech capabilities of Windows XP
+to read the text on the BeebEm screen.  Text convertion is driven using the
+numeric keypad keys 0 to 9.  The key assignments are based on the basic JAWS
+screen reading keys with some additions.  The key assignments are:
+
+  num pad 5                  read current character.
+  num pad 6                  read next character.
+  num pad 4                  read prior character.
+
+  insert + num pad 5         read current word.
+  insert + num pad 6         read next word.
+  insert + num pad 4         read prior word.
+
+  insert + num pad 8         read current line.
+  num pad 2                  read next line.
+  num pad 8                  read prior line.
+  insert + num pad 2         read entire screen (say all).
+
+  alt + num pad 5            read current sentence.
+  alt + num pad 2            read next sentence.
+  alt + num pad 8            read prior sentence.
+
+  num pad 9                  move speech cursor to top of screen.
+  insert + num pad 9         speak speech cursor position.
+
+  num pad 3                  move speech cursor to bottom of screen.
+  insert + num pad 3         toggle speaking of punctuation.
+
+  insert + num pad 1         toggle auto-read of text as it is written
+                             to the BBC micro screen.
+  num pad 1                  read any buffered auto-read text.
+
+If you are running JAWS you may find that it intercepts some of the key
+presses listed above and stops BeebEm from receiving them.  In particular it
+may intercept num pad 5 presses, so try num pad 7 instead as BeebEm
+interprets num pad 7 in the same way as 5.  The BeebEm key assignments will
+also work when num lock is switched on so you could try that as well.  You
+may be able to configure JAWS so it does not say the num pad key names.
+
+Under normal use you may find switching on the auto-read function useful
+(insert + num pad 1).  This will read text as it gets written to the BBC
+micro screen.  This works when using the BASIC command prompt and in many of
+the text based adventure games available for the BBC micro.
+
+As with the text view support the ALT + ` (back quote) key press is
+available to synchronise the speech cursor position with the BBC Micro
+cursor position.
+
+END OF SECTION.
 
 
 Troubleshooting

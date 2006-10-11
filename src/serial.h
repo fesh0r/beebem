@@ -3,6 +3,9 @@
 
 #ifndef SERIAL_HEADER
 #define SERIAL_HEADER
+
+#define TAPECYCLES 357 // 2000000/5600 - 5600 is normal tape speed
+
 extern CycleCountT TapeTrigger;
 void Write_ACIA_Control(unsigned char CReg);
 void Write_ACIA_Tx_Data(unsigned char Data);
@@ -25,6 +28,10 @@ extern volatile bool bSerialStateChanged;
 extern bool TapeControlEnabled;
 extern char UEFTapeName[256];
 extern int UnlockTape;
+extern unsigned char TxD,RxD;
+extern int TapeClock,OldClock;
+extern int TapeClockSpeed;
+
 void SetTapeSpeed(int speed);
 void SetUnlockTape(int unlock);
 void TapeControlOpenDialog(HINSTANCE hinst, HWND hwndMain);

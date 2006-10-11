@@ -57,6 +57,8 @@ scsi_t scsi;
 FILE *SCSIDisc[4] = {0};
 int SCSISize[4];
 
+char HardDriveEnabled = 0;
+
 void SCSIReset(void)
 {
 FILE *f;
@@ -71,7 +73,13 @@ char buff[256];
         sprintf(buff, "%s/discims/scsi%d.dat", RomPath, i);
 
         if (SCSIDisc[i] != NULL)
+        {
             fclose(SCSIDisc[i]);
+            SCSIDisc[i]=NULL;
+        }
+
+        if (!HardDriveEnabled)
+            continue;
 
         SCSIDisc[i] = fopen(buff, "rb+");
 
@@ -109,6 +117,8 @@ char buff[256];
 
 void SCSIWrite(int Address, int Value)
 {
+    if (!HardDriveEnabled)
+        return;
 
 //  SCSILog("SCSIWrite Address = 0x%02x, Value = 0x%02x, Phase = %d, PC = 0x%04x\n", Address, Value, scsi.phase, ProgramCounter);
 
@@ -144,6 +154,9 @@ void SCSIWrite(int Address, int Value)
 
 int SCSIRead(int Address)
 {
+    if (!HardDriveEnabled)
+        return 0xff;
+
 int data = 0xff;
 
     switch (Address)
@@ -646,7 +659,7 @@ int DiscModeSense(unsigned char *cdb, unsigned char *buf)
     if (size == 0)
         size = 22;
 
-    size = fread(buf, 1, size, f);
+    size = (int)fread(buf, 1, size, f);
 
 // heads = buf[15];
 // cyl   = buf[13] * 256 + buf[14];
@@ -709,6 +722,7 @@ bool DiscFormat(unsigned char *buf)
 
     if (SCSIDisc[scsi.lun] != NULL) {
         fclose(SCSIDisc[scsi.lun]);
+        SCSIDisc[scsi.lun]=NULL;
     }
 
     sprintf(buff, "%s/discims/scsi%d.dat", RomPath, scsi.lun);

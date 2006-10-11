@@ -87,12 +87,13 @@ unsigned char MaxSects[2]; // Maximum sectors per track
 unsigned int DefStart[2]; // Starting point for head 1
 unsigned int TrkLen[2]; // Track Length in bytes
 unsigned char DWriteable[2]={0,0}; // Write Protect
-char DiskDensity,SelectedDensity;
+char DiskDensity[2];
+char SelectedDensity;
 unsigned char RotSect=0; // Sector counter to fool Opus DDOS on read address
 bool InvertTR00; // Needed because the bloody stupid watford board inverts the input.
 
 // A few defines here
-#define DENSITY_MISMATCH DiskDensity!=SelectedDensity
+#define DENSITY_MISMATCH DiskDensity[CurrentDrive]!=SelectedDensity
 
 #define SPIN_DOWN_TIME 750000 // .750 Milliseconds
 #define SETTLE_TIME 30000 // 30 Milliseconds
@@ -467,7 +468,7 @@ void Poll1770(int NCycles) {
                         FormatSize = 512;
                         MaxSects[CurrentDrive] = 8;
                         SecSize[CurrentDrive]=512;
-                        DiskDensity=0;
+                        DiskDensity[CurrentDrive]=0;
                         DiscStep[CurrentDrive]=512 * 9 * 2;
                         DiscStrt[CurrentDrive]=ptr[1] * 512 * 9;       // Head number 0 or 1
                         DefStart[CurrentDrive]=512 * 9;
@@ -478,7 +479,7 @@ void Poll1770(int NCycles) {
                         FormatSize = 1024;
                         MaxSects[CurrentDrive] = 4;
                         SecSize[CurrentDrive]=1024;
-                        DiskDensity=0;
+                        DiskDensity[CurrentDrive]=0;
                         DiscStep[CurrentDrive]=1024 * 5 * 2;
                         DiscStrt[CurrentDrive]=ptr[1] * 1024 * 5;       // Head number 0 or 1
                         DefStart[CurrentDrive]=1024 * 5;
@@ -663,7 +664,7 @@ void Load1770DiscImage(char *DscFileName,int DscDrive,unsigned char DscType,HMEN
 //  Feb 14th 2001 - Valentines Day - Bah Humbug - ADFS Support added here
     if (DscType==0) {
         SecSize[DscDrive]=256;
-        DiskDensity=1;
+        DiskDensity[DscDrive]=1;
         DiscStep[DscDrive]=2560;
         DiscStrt[DscDrive]=0;
         DefStart[DscDrive]=0;
@@ -671,7 +672,7 @@ void Load1770DiscImage(char *DscFileName,int DscDrive,unsigned char DscType,HMEN
     }
     if (DscType==1) {
         SecSize[DscDrive]=256;
-        DiskDensity=1;
+        DiskDensity[DscDrive]=1;
         DiscStep[DscDrive]=5120;
         DiscStrt[DscDrive]=CurrentHead[DscDrive]*2560;
         DefStart[DscDrive]=2560;
@@ -679,7 +680,7 @@ void Load1770DiscImage(char *DscFileName,int DscDrive,unsigned char DscType,HMEN
     }
     if (DscType==3) {
         SecSize[DscDrive]=1024;
-        DiskDensity=0;
+        DiskDensity[DscDrive]=0;
         DiscStep[DscDrive]=1024 * 5 * 2;
         DiscStrt[DscDrive]=CurrentHead[DscDrive]*1024 * 5;
         DefStart[DscDrive]=1024 * 5;
@@ -687,7 +688,7 @@ void Load1770DiscImage(char *DscFileName,int DscDrive,unsigned char DscType,HMEN
     }
     if (DscType==4) {
         SecSize[DscDrive]=512;
-        DiskDensity=0;
+        DiskDensity[DscDrive]=0;
         DiscStep[DscDrive]=512 * 9 * 2;
         DiscStrt[DscDrive]=CurrentHead[DscDrive]*512 * 9;
         DefStart[DscDrive]=512 * 9;
@@ -695,7 +696,7 @@ void Load1770DiscImage(char *DscFileName,int DscDrive,unsigned char DscType,HMEN
     }
     if (DscType==2) {
         SecSize[DscDrive]=256;
-        DiskDensity=0;
+        DiskDensity[DscDrive]=0;
         DiscStep[DscDrive]=8192;
         DiscStrt[DscDrive]=CurrentHead[DscDrive]*4096;
         DefStart[DscDrive]=4096;
@@ -827,7 +828,7 @@ void Save1770UEF(FILE *SUEF)
     memset(blank,0,256);
 
     fput16(0x046F,SUEF);
-    fput32(856,SUEF);
+    fput32(857,SUEF);
     fputc(DiscType[0],SUEF);
     fputc(DiscType[1],SUEF);
 
@@ -884,13 +885,14 @@ void Save1770UEF(FILE *SUEF)
     fput32(TrkLen[1],SUEF);
     fputc(DWriteable[0],SUEF);
     fputc(DWriteable[1],SUEF);
-    fputc(DiskDensity,SUEF);
+    fputc(DiskDensity[0],SUEF);
+    fputc(DiskDensity[1],SUEF);
     fputc(SelectedDensity,SUEF);
     fputc(RotSect,SUEF);
     fwrite(FDCDLL,1,256,SUEF);
 }
 
-void Load1770UEF(FILE *SUEF)
+void Load1770UEF(FILE *SUEF,int Version)
 {
     extern char FDCDLL[256];
     extern bool DiscLoaded[2];
@@ -945,8 +947,8 @@ void Load1770UEF(FILE *SUEF)
         CStepRate=fgetc(SUEF);
         ESpinUp=fgetc(SUEF);
         EVerify=fgetc(SUEF);
-        LightsOn[0]=fgetc(SUEF);
-        LightsOn[1]=fgetc(SUEF);
+        LightsOn[0]=(fgetc(SUEF)!=0);
+        LightsOn[1]=(fgetc(SUEF)!=0);
         ByteCount=fget32(SUEF);
         DataPos=fget32(SUEF);
         ExtControl=fgetc(SUEF);
@@ -967,12 +969,16 @@ void Load1770UEF(FILE *SUEF)
         TrkLen[1]=fget32(SUEF);
         DWriteable[0]=fgetc(SUEF);
         DWriteable[1]=fgetc(SUEF);
-        DiskDensity=fgetc(SUEF);
+        DiskDensity[0]=fgetc(SUEF);
+        if (Version <= 9)
+            DiskDensity[1]=DiskDensity[0];
+        else
+            DiskDensity[1]=fgetc(SUEF);
         SelectedDensity=fgetc(SUEF);
         RotSect=fgetc(SUEF);
         fread(FDCDLL,1,256,SUEF);
 
-        if (CurrentDrive=1)
+        if (CurrentDrive==1)
             CDiscOpen=&Disc1Open;
         else
             CDiscOpen=&Disc0Open;

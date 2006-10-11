@@ -56,6 +56,8 @@ typedef struct {
 sasi_t sasi;
 FILE *SASIDisc[4] = {0};
 
+extern char HardDriveEnabled;
+
 void SASIReset(void)
 {
 int i;
@@ -69,7 +71,13 @@ char buff[256];
         sprintf(buff, "%s/discims/sasi%d.dat", RomPath, i);
 
         if (SASIDisc[i] != NULL)
+        {
             fclose(SASIDisc[i]);
+            SASIDisc[i]=NULL;
+        }
+
+        if (!HardDriveEnabled)
+            continue;
 
         SASIDisc[i] = fopen(buff, "rb+");
 
@@ -86,6 +94,8 @@ char buff[256];
 
 void SASIWrite(int Address, int Value)
 {
+    if (!HardDriveEnabled)
+        return;
 
 //  fprintf(stderr, "SASIWrite Address = 0x%02x, Value = 0x%02x, Phase = %d, PC = 0x%04x\n", Address, Value, sasi.phase, ProgramCounter);
 
@@ -111,6 +121,9 @@ void SASIWrite(int Address, int Value)
 
 int SASIRead(int Address)
 {
+    if (!HardDriveEnabled)
+        return 0xff;
+
 int data = 0xff;
 
     switch (Address)
@@ -596,6 +609,7 @@ bool SASIDiscFormat(unsigned char *buf)
 
     if (SASIDisc[sasi.lun] != NULL) {
         fclose(SASIDisc[sasi.lun]);
+        SASIDisc[sasi.lun]=NULL;
     }
 
     record = buf[1] & 0x1f;
