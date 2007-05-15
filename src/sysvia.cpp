@@ -626,8 +626,6 @@ unsigned char BCD(unsigned char nonBCD) {
 }
 /*-------------------------------------------------------------------------*/
 void CMOSWrite(unsigned char CMOSAddr,unsigned char CMOSData) {
-    char TmpPath[256];
-    unsigned char CMA;
     // Many thanks to Tom Lees for supplying me with info on the 146818 registers
     // for these two functions.
     // Clock registers 0-0x9h shall not be writable
@@ -635,14 +633,6 @@ void CMOSWrite(unsigned char CMOSAddr,unsigned char CMOSData) {
     // but we can leave it here for future developments
     if (CMOSAddr>0xd) {
         CMOSRAM[CMOSAddr]=CMOSData;
-        // write CMOS Ram
-        strcpy(TmpPath,RomPath); strcat(TmpPath,"/beebstate/cmos.ram");
-        CMDF=fopen(TmpPath,"wb");
-        if (CMDF != NULL)
-        {
-            for(CMA=0xe;CMA<64;CMA++) fputc(CMOSRAM[CMA],CMDF);
-            fclose(CMDF);
-        }
     }
 }
 

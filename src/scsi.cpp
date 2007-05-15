@@ -70,7 +70,7 @@ char buff[256];
 
     for (i = 0; i < 4; ++i)
     {
-        sprintf(buff, "%s/discims/scsi%d.dat", RomPath, i);
+        sprintf(buff, "%s/discims/scsi%d.dat", mainWin->GetUserDataPath(), i);
 
         if (SCSIDisc[i] != NULL)
         {
@@ -94,7 +94,7 @@ char buff[256];
         if (SCSIDisc[i] != NULL)
         {
 
-            sprintf(buff, "%s/discims/scsi%d.dsc", RomPath, i);
+            sprintf(buff, "%s/discims/scsi%d.dsc", mainWin->GetUserDataPath(), i);
 
             f = fopen(buff, "rb");
 
@@ -141,6 +141,7 @@ void SCSIWrite(int Address, int Value)
             {
                 scsi.irq = true;
                 intStatus |= (1 << hdc);
+                scsi.status = 0x00;
             }
             else
             {
@@ -337,6 +338,11 @@ void BusFree(void)
     scsi.irq = false;
 
     scsi.phase = busfree;
+
+    LEDs.HDisc[0] = 0;
+    LEDs.HDisc[1] = 0;
+    LEDs.HDisc[2] = 0;
+    LEDs.HDisc[3] = 0;
 }
 
 void Selection(int data)
@@ -372,6 +378,8 @@ void Execute(void)
 //  }
 
     scsi.lun = (scsi.cmd[1]) >> 5;
+
+    LEDs.HDisc[scsi.lun] = 1;
 
     switch (scsi.cmd[0]) {
         case 0x00 :
@@ -649,7 +657,7 @@ int DiscModeSense(unsigned char *cdb, unsigned char *buf)
 
     if (SCSIDisc[scsi.lun] == NULL) return 0;
 
-    sprintf(buff, "%s/discims/scsi%d.dsc", RomPath, scsi.lun);
+    sprintf(buff, "%s/discims/scsi%d.dsc", mainWin->GetUserDataPath(), scsi.lun);
 
     f = fopen(buff, "rb");
 
@@ -698,7 +706,7 @@ bool WriteGeometory(unsigned char *buf)
 
     if (SCSIDisc[scsi.lun] == NULL) return false;
 
-    sprintf(buff, "%s/discims/scsi%d.dsc", RomPath, scsi.lun);
+    sprintf(buff, "%s/discims/scsi%d.dsc", mainWin->GetUserDataPath(), scsi.lun);
 
     f = fopen(buff, "wb");
 
@@ -725,7 +733,7 @@ bool DiscFormat(unsigned char *buf)
         SCSIDisc[scsi.lun]=NULL;
     }
 
-    sprintf(buff, "%s/discims/scsi%d.dat", RomPath, scsi.lun);
+    sprintf(buff, "%s/discims/scsi%d.dat", mainWin->GetUserDataPath(), scsi.lun);
 
     SCSIDisc[scsi.lun] = fopen(buff, "wb");
     if (SCSIDisc[scsi.lun] != NULL) fclose(SCSIDisc[scsi.lun]);
@@ -733,7 +741,7 @@ bool DiscFormat(unsigned char *buf)
 
     if (SCSIDisc[scsi.lun] == NULL) return false;
 
-    sprintf(buff, "%s/discims/scsi%d.dsc", RomPath, scsi.lun);
+    sprintf(buff, "%s/discims/scsi%d.dsc", mainWin->GetUserDataPath(), scsi.lun);
 
     f = fopen(buff, "rb");
 

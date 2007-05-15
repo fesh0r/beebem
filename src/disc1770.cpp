@@ -634,32 +634,56 @@ void Poll1770(int NCycles) {
 void Load1770DiscImage(char *DscFileName,int DscDrive,unsigned char DscType,HMENU dmenu) {
     long int TotalSectors;
     long HeadStore;
+    bool openFailure=false;
     if (DscDrive==0) {
         if (Disc0Open==1) fclose(Disc0);
+        Disc0Open=0;
         Disc0=fopen(DscFileName,"rb+");
-        if (Disc0!=NULL) EnableMenuItem(dmenu, IDM_WPDISC0, MF_ENABLED );
+        if (Disc0!=NULL) {
+            EnableMenuItem(dmenu, IDM_WPDISC0, MF_ENABLED );
+        }
         else {
             Disc0=fopen(DscFileName,"rb");
-            EnableMenuItem(dmenu, IDM_WPDISC0, MF_GRAYED );
+            if (Disc0!=NULL)
+                EnableMenuItem(dmenu, IDM_WPDISC0, MF_GRAYED );
         }
-        DWriteable[0]=0;
-        CheckMenuItem(dmenu,IDM_WPDISC0,MF_CHECKED);
-        if (CurrentDrive==0) CurrentDisc=Disc0;
-        Disc0Open=1;
+        if (Disc0) {
+            if (CurrentDrive==0) CurrentDisc=Disc0;
+            Disc0Open=1;
+        }
+        else {
+            openFailure=true;
+        }
     }
     if (DscDrive==1) {
         if (Disc1Open==1) fclose(Disc1);
+        Disc1Open=0;
         Disc1=fopen(DscFileName,"rb+");
-        if (Disc1!=NULL) EnableMenuItem(dmenu, IDM_WPDISC1, MF_ENABLED );
+        if (Disc1!=NULL) {
+            EnableMenuItem(dmenu, IDM_WPDISC1, MF_ENABLED );
+        }
         else {
             Disc1=fopen(DscFileName,"rb");
-            EnableMenuItem(dmenu, IDM_WPDISC1, MF_GRAYED );
+            if (Disc1!=NULL)
+                EnableMenuItem(dmenu, IDM_WPDISC1, MF_GRAYED );
         }
-        DWriteable[1]=0;
-        CheckMenuItem(dmenu,IDM_WPDISC1,MF_CHECKED);
-        if (CurrentDrive==1) CurrentDisc=Disc1;
-        Disc1Open=1;
+        if (Disc1) {
+            if (CurrentDrive==1) CurrentDisc=Disc1;
+            Disc1Open=1;
+        }
+        else {
+            openFailure=true;
+        }
     }
+
+    if (openFailure)
+    {
+        char errstr[200];
+        sprintf(errstr, "Could not open disc file:\n  %s", DscFileName);
+        MessageBox(GETHWND,errstr,WindowTitle,MB_OK|MB_ICONERROR);
+        return;
+    }
+
 //  if (DscType=0) CurrentHead[DscDrive]=0;
 //  Feb 14th 2001 - Valentines Day - Bah Humbug - ADFS Support added here
     if (DscType==0) {
@@ -712,7 +736,7 @@ void Load1770DiscImage(char *DscFileName,int DscDrive,unsigned char DscType,HMEN
         TotalSectors|=fgetc(CurrentDisc)<<8;
         TotalSectors|=fgetc(CurrentDisc)<<16;
         fseek(CurrentDisc,HeadStore,SEEK_SET);
-        if (TotalSectors<0xa00) {
+        if ( (TotalSectors == 0x500) || (TotalSectors == 0x280) ) {     // Just so 1024 sector mixed mode ADFS/NET discs can be recognised as dbl sided
             DiscStep[DscDrive]=4096;
             DiscStrt[DscDrive]=0;
             DefStart[DscDrive]=0;

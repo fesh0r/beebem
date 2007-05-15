@@ -201,8 +201,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 3,2,0,0
- PRODUCTVERSION 3,2,0,0
+ FILEVERSION 3,7,0,0
+ PRODUCTVERSION 3,7,0,0
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -218,14 +218,14 @@ BEGIN
         BLOCK "080904b0"
         BEGIN
             VALUE "Comments", "BeebEm - BBC Micro Emulator"
-            VALUE "CompanyName", "-"
+            VALUE "CompanyName", "Mike Wyatt"
             VALUE "FileDescription", "BeebEm"
-            VALUE "FileVersion", "3.5"
+            VALUE "FileVersion", "3.7"
             VALUE "InternalName", "BeebEm"
-            VALUE "LegalCopyright", "Copyright © 2006"
+            VALUE "LegalCopyright", "Copyright © 2007"
             VALUE "OriginalFilename", "BeebEm.exe"
             VALUE "ProductName", "BeebEm"
-            VALUE "ProductVersion", "3.5"
+            VALUE "ProductVersion", "3.7"
         END
     END
     BLOCK "VarFileInfo"
@@ -347,6 +347,7 @@ BEGIN
             MENUITEM "Eject Disc 1",                IDM_EJECTDISC1
             MENUITEM "Write Protect 0",             IDM_WPDISC0
             MENUITEM "Write Protect 1",             IDM_WPDISC1
+            MENUITEM "Protect on Load",             IDM_WPONLOAD
         END
         MENUITEM SEPARATOR
         MENUITEM "R&eset",                      ID_FILE_RESET
@@ -409,29 +410,37 @@ BEGIN
     END
     POPUP "&View"
     BEGIN
-        MENUITEM "&DirectDraw On/Off",          IDM_DDRAWONOFF
-        MENUITEM "&Buffer In Video RAM",        IDM_DDINVIDEORAM
-        MENUITEM "32-bit DirectDraw On/Off",    IDM_DD32ONOFF
+        POPUP "&Display Renderer"
+        BEGIN
+            MENUITEM "Windows GDI",                 IDM_DISPGDI
+            MENUITEM "DirectDraw",                  IDM_DISPDDRAW
+            MENUITEM "DirectX9",                    IDM_DISPDX9
+        END
+        MENUITEM "DirectX Smoothing",           IDM_DXSMOOTHING
         MENUITEM SEPARATOR
         MENUITEM "&Speed and FPS On/Off",       IDM_SPEEDANDFPS
         MENUITEM SEPARATOR
         MENUITEM "&Full Screen",                IDM_FULLSCREEN
         POPUP "Window Sizes"
         BEGIN
-            MENUITEM "160x128",                     IDM_160X128
-            MENUITEM "240x192",                     IDM_240X192
             MENUITEM "320x256",                     IDM_320X256
-            MENUITEM "640x256",                     IDM_640X256
             MENUITEM "640x512",                     IDM_640X512
             MENUITEM "800x600",                     IDM_800X600
             MENUITEM "1024x512",                    IDM_1024X512
             MENUITEM "1024x768",                    IDM_1024X768
+            MENUITEM "1280x1024",                   IDM_1280X1024
+            MENUITEM "1440x1080",                   IDM_1440X1080
+            MENUITEM "1600x1200",                   IDM_1600X1200
         END
-        POPUP "DirectDraw Full Screen Modes"
+        POPUP "DirectX Full Screen Modes"
         BEGIN
             MENUITEM "640x480",                     ID_VIEW_DD_640X480
             MENUITEM "1024x768",                    ID_VIEW_DD_1024X768
+            MENUITEM "1280x768",                    ID_VIEW_DD_1280X768
+            MENUITEM "1280x960",                    ID_VIEW_DD_1280X960
             MENUITEM "1280x1024",                   ID_VIEW_DD_1280X1024
+            MENUITEM "1440x900",                    ID_VIEW_DD_1440X900
+            MENUITEM "1600x1200",                   ID_VIEW_DD_1600X1200
         END
         MENUITEM SEPARATOR
         POPUP "Monitor type"
@@ -548,6 +557,7 @@ BEGIN
         MENUITEM "&Master 512 Second Processor", IDM_TUBE186
         MENUITEM "Acorn Z80 Second Processor",  IDM_ACORNZ80
         MENUITEM "Torch &Z80 Second Processor", IDM_TORCH
+        MENUITEM "ARM Second Processor",        IDM_ARM
         MENUITEM SEPARATOR
         POPUP "&Allow ROM writes"
         BEGIN
@@ -589,6 +599,7 @@ BEGIN
         MENUITEM "Teletext Adapter On/Off",     ID_TELETEXT
         MENUITEM "Hard Drive On/Off",           ID_HARDDRIVE
         MENUITEM "User Port Breakout Box",      ID_BREAKOUT
+        MENUITEM "User Port RTC Module",        ID_UPRM
     END
     POPUP "&Options"
     BEGIN

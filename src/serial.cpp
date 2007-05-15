@@ -81,7 +81,6 @@ int TapeClockSpeed = 5600;
 int UnlockTape=1;
 
 // Tape control variables
-#define MAX_MAP_LINES 4096
 int map_lines;
 char map_desc[MAX_MAP_LINES][40];
 int map_time[MAX_MAP_LINES];
@@ -468,8 +467,13 @@ void Serial_Poll(void)
 
             if (Cass_Relay == 1 && CSWOpen && TapeClock != OldClock)
             {
+                int last_state = csw_state;
+
                 CSW_BUF = csw_poll(TapeClock);
                 OldClock = TapeClock;
+
+                if (last_state != csw_state)
+                    TapeControlUpdateCounter(csw_ptr);
 
                 if (csw_state == 0)     // Waiting for tone
                 {
@@ -551,7 +555,7 @@ void Serial_Poll(void)
                     if (GetLastError()==ERROR_IO_PENDING) {
                         bWaitingForData=TRUE;
                     } else {
-                        MessageBox(GETHWND,"Serial Port Error","BBC Emulator",MB_OK|MB_ICONERROR);
+                        MessageBox(GETHWND,"Serial Port Error",WindowTitle,MB_OK|MB_ICONERROR);
                     }
                 } else {
                     if (BytesIn>0) {
@@ -652,7 +656,7 @@ void InitSerialPort(void) {
         if (SerialPort==4) pnSerialPort="Com4";
         hSerialPort=CreateFile(pnSerialPort,GENERIC_READ|GENERIC_WRITE,0,0,OPEN_EXISTING,FILE_FLAG_OVERLAPPED,0);
         if (hSerialPort==INVALID_HANDLE_VALUE) {
-            MessageBox(GETHWND,"Could not open specified serial port","BBC Emulator",MB_OK|MB_ICONERROR);
+            MessageBox(GETHWND,"Could not open specified serial port",WindowTitle,MB_OK|MB_ICONERROR);
         }
         else {
             bPortStat=SetupComm(hSerialPort, 1280, 1280);
@@ -794,6 +798,9 @@ bool map_file(char *file_name)
     last_data=0;
     blk_num=0;
 
+    memset(map_desc, 0, sizeof(map_desc));
+    memset(map_time, 0, sizeof(map_time));
+
     while (!done && map_lines < MAX_MAP_LINES)
     {
         data = uef_getdata(i);
@@ -929,6 +936,14 @@ void TapeControlOpenDialog(HINSTANCE hinst, HWND hwndMain)
             TapeClock = Clock;
             TapeControlUpdateCounter(TapeClock);
         }
+
+        if (CSWOpen)
+        {
+            Clock = csw_ptr;
+            LoadCSW(UEFTapeName);
+            csw_ptr = Clock;
+            TapeControlUpdateCounter(csw_ptr);
+        }
     }
 }
 
@@ -950,18 +965,22 @@ void TapeControlOpenFile(char *UEFName)
 
     if (TapeControlEnabled)
     {
-        if (!map_file(UEFName))
+        if (CSWOpen == 0)
         {
-            char errstr[256];
-            sprintf(errstr, "Cannot open UEF file:\n  %s", UEFName);
-            MessageBox(GETHWND,errstr,"BeebEm",MB_ICONERROR|MB_OK);
+            if (!map_file(UEFName))
+            {
+                char errstr[256];
+                sprintf(errstr, "Cannot open UEF file:\n  %s", UEFName);
+                MessageBox(GETHWND,errstr,"BeebEm",MB_ICONERROR|MB_OK);
+                return;
+            }
         }
-        else
-        {
-            SendMessage(hwndMap, LB_RESETCONTENT, 0, 0);
-            for (i = 0; i < map_lines; ++i)
-                SendMessage(hwndMap, LB_ADDSTRING, 0, (LPARAM)map_desc[i]);
-        }
+
+        SendMessage(hwndMap, LB_RESETCONTENT, 0, 0);
+        for (i = 0; i < map_lines; ++i)
+            SendMessage(hwndMap, LB_ADDSTRING, 0, (LPARAM)map_desc[i]);
+
+        TapeControlUpdateCounter(0);
     }
 }
 
@@ -1009,7 +1028,14 @@ BOOL CALLBACK TapeControlDlgProc(HWND hwndDlg, UINT message, WPARAM wParam, LPAR
                         s = (int)SendMessage(hwndMap, LB_GETCURSEL, 0, 0);
                         if (s != LB_ERR && s >= 0 && s < map_lines)
                         {
-                            TapeClock=map_time[s];
+                            if (CSWOpen)
+                            {
+                                csw_ptr = map_time[s];
+                            }
+                            else
+                            {
+                                TapeClock=map_time[s];
+                            }
                             OldClock=0;
                             TapeTrigger=TotalCycles+TAPECYCLES;
                         }
@@ -1032,9 +1058,11 @@ BOOL CALLBACK TapeControlDlgProc(HWND hwndDlg, UINT message, WPARAM wParam, LPAR
                     TapeControlStopRecording(false);
                     TapeAudio.Enabled=FALSE;
                     CloseUEF();
+                    CloseCSW();
                     return TRUE;
 
                 case IDC_TCRECORD:
+                    if (CSWOpen) break;
                     if (!TapeRecording)
                     {
                         r = IDCANCEL;

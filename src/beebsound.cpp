@@ -445,7 +445,7 @@ void PlayUpTil(double DestTime) {
             }
             else
             {
-                MessageBox(GETHWND,"Failed to open audio.dbg","BBC Emulator",MB_OK|MB_ICONERROR);
+                MessageBox(GETHWND,"Failed to open audio.dbg",WindowTitle,MB_OK|MB_ICONERROR);
                 exit(1);
             }
 #else
@@ -584,7 +584,7 @@ static void InitAudioDev(int sampleratein) {
                 hr = DSound->SetCooperativeLevel(mainWin->GethWnd(), DSSCL_WRITEPRIMARY);
                 if (hr == DSERR_UNSUPPORTED) {
                     MessageBox(GETHWND,"Use of Primary DirectSound Buffer unsupported on this system. Using Secondary DirectSound Buffer instead",
-                        "BBC Emulator",MB_OK|MB_ICONERROR);
+                        WindowTitle,MB_OK|MB_ICONERROR);
                     UsePrimaryBuffer=0;
                 }
             }
@@ -600,7 +600,7 @@ static void InitAudioDev(int sampleratein) {
         {
             char  errstr[200];
             sprintf(errstr,"Direct Sound initialisation failed on part %i\nFailure code %X",dsect,hr);
-            MessageBox(GETHWND,errstr,"BBC Emulator",MB_OK|MB_ICONERROR);
+            MessageBox(GETHWND,errstr,WindowTitle,MB_OK|MB_ICONERROR);
             SoundReset();
         }
         mainWin->SetPBuff();
@@ -613,7 +613,7 @@ void LoadRelaySounds(void) {
     FILE *RelayFile;
     char RelayFileName[256];
     char *PRFN=RelayFileName;
-    strcpy(PRFN,RomPath);
+    strcpy(PRFN,mainWin->GetAppPath());
     strcat(PRFN,"RelayOn.SND");
     RelayFile=fopen(PRFN,"rb");
     if (RelayFile!=NULL) {
@@ -623,9 +623,9 @@ void LoadRelaySounds(void) {
     else {
         char  errstr[200];
         sprintf(errstr,"Could not open Relay ON Sound");
-        MessageBox(GETHWND,errstr,"BBC Emulator",MB_OK|MB_ICONERROR);
+        MessageBox(GETHWND,errstr,WindowTitle,MB_OK|MB_ICONERROR);
     }
-    strcpy(PRFN,RomPath);
+    strcpy(PRFN,mainWin->GetAppPath());
     strcat(PRFN,"RelayOff.SND");
     RelayFile=fopen(PRFN,"rb");
     if (RelayFile!=NULL) {
@@ -635,7 +635,7 @@ void LoadRelaySounds(void) {
     else {
         char  errstr[200];
         sprintf(errstr,"Could not open Relay OFF Sound");
-        MessageBox(GETHWND,errstr,"BBC Emulator",MB_OK|MB_ICONERROR);
+        MessageBox(GETHWND,errstr,WindowTitle,MB_OK|MB_ICONERROR);
     }
 }
 

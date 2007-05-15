@@ -67,7 +67,7 @@ char buff[256];
     if (!TeleTextAdapterEnabled)
         return;
 
-    sprintf(buff, "%s/discims/txt%d.dat", RomPath, txtChnl);
+    sprintf(buff, "%s/discims/txt%d.dat", mainWin->GetUserDataPath(), txtChnl);
 
     txtFile = fopen(buff, "rb");
 

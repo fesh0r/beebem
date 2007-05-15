@@ -29,9 +29,11 @@
 #include <iostream>
 #include <fstream>
 #include <stdio.h>
+#include <time.h>
 
 #include "6502core.h"
 #include "uservia.h"
+#include "sysvia.h"
 #include "via.h"
 #include "viastate.h"
 #include "debug.h"
@@ -39,6 +41,13 @@
 #include "beebemrc.h"
 
 using namespace std;
+
+int RTC_bit = 0;
+int RTC_cmd = 0;
+int RTC_data = 0;        // Mon    Yr   Day         Hour        Min
+unsigned char RTC_ram[8] = {0x12, 0x01, 0x05, 0x00, 0x05, 0x00, 0x07, 0x00};
+
+int RTC_Enabled = 0;
 
 bool mBreakOutWindow = false;
 
@@ -83,6 +92,9 @@ static void UpdateIFRTopBit(void) {
 /*--------------------------------------------------------------------------*/
 /* Address is in the range 0-f - with the fe60 stripped out */
 void UserVIAWrite(int Address, int Value) {
+
+static int last_Value = 0xff;
+
   /* cerr << "UserVIAWrite: Address=0x" << hex << Address << " Value=0x" << Value << dec << " at " << TotalCycles << "\n";
   DumpRegs(); */
 
@@ -100,6 +112,70 @@ void UserVIAWrite(int Address, int Value) {
         UpdateIFRTopBit();
       };
       if (mBreakOutWindow) ShowOutputs(UserVIAState.orb);
+            if (RTC_Enabled)
+            {
+                if ( ((last_Value & 0x02) == 0x02) && ((Value & 0x02) == 0x00) )        // falling clock edge
+                {
+                    if ((Value & 0x04) == 0x04)
+                    {
+                        RTC_cmd = (RTC_cmd >> 1) | ((Value & 0x01) << 15);
+                        RTC_bit++;
+
+                        WriteLog("RTC Shift cmd : 0x%03x, bit : %d\n", RTC_cmd, RTC_bit);
+
+                    } else {
+
+                        if (RTC_bit == 11)      // Write data
+                        {
+                            RTC_cmd >>= 5;
+
+                            WriteLog("RTC Write cmd : 0x%03x, reg : 0x%02x, data = 0x%02x\n", RTC_cmd, (RTC_cmd & 0x0f) >> 1, RTC_cmd >> 4);
+
+                            RTC_ram[(RTC_cmd & 0x0f) >> 1] = RTC_cmd >> 4;
+                        } else {
+                            RTC_cmd >>= 12;
+
+                            time_t SysTime;
+                            struct tm * CurTime;
+
+                            time( &SysTime );
+                            CurTime = localtime( &SysTime );
+
+                            switch ((RTC_cmd & 0x0f) >> 1)
+                            {
+                                case 0 :
+                                    RTC_data = BCD((CurTime->tm_mon)+1);
+                                    break;
+                                case 1 :
+                                    RTC_data = BCD((CurTime->tm_year % 100) - 1);
+                                    break;
+                                case 2 :
+                                    RTC_data = BCD(CurTime->tm_mday);
+                                    break;
+                                case 3 :
+                                    RTC_data = RTC_ram[3];
+                                    break;
+                                case 4 :
+                                    RTC_data = BCD(CurTime->tm_hour);
+                                    break;
+                                case 5 :
+                                    RTC_data = RTC_ram[5];
+                                    break;
+                                case 6 :
+                                    RTC_data = BCD(CurTime->tm_min);
+                                    break;
+                                case 7 :
+                                    RTC_data = RTC_ram[7];
+                                    break;
+                            }
+
+                            WriteLog("RTC Read cmd : 0x%03x, reg : 0x%02x, data : 0x%02x\n", RTC_cmd, (RTC_cmd & 0x0f) >> 1, RTC_data);
+
+                        }
+                    }
+                }
+            }
+                last_Value = Value;
       break;
 
     case 1:
@@ -111,7 +187,7 @@ void UserVIAWrite(int Address, int Value) {
 #ifdef WIN32
           char errstr[200];
           sprintf(errstr, "Failed to write to printer file:\n  %s", PrinterFileName);
-          MessageBox(GETHWND,errstr,"BBC Emulator",MB_OK|MB_ICONERROR);
+          MessageBox(GETHWND,errstr,WindowTitle,MB_OK|MB_ICONERROR);
 #else
           cerr << "Failed to write to printer file " << PrinterFileName << "\n";
 #endif
@@ -125,6 +201,7 @@ void UserVIAWrite(int Address, int Value) {
 
     case 2:
       UserVIAState.ddrb=Value & 0xff;
+      if (RTC_Enabled && ((Value & 0x07) == 0x07)) RTC_bit = 0;
       break;
 
     case 3:
@@ -220,6 +297,12 @@ int UserVIARead(int Address) {
   switch (Address) {
     case 0: /* IRB read */
       tmp=(UserVIAState.orb & UserVIAState.ddrb) | (UserVIAState.irb & (~UserVIAState.ddrb));
+
+      if (RTC_Enabled)
+      {
+        tmp = (tmp & 0xfe) | (RTC_data & 0x01);
+        RTC_data = RTC_data >> 1;
+      }
 
       if (mBreakOutWindow) ShowInputs(tmp);
 
@@ -520,7 +603,7 @@ void PrinterEnable(char *FileName) {
 #ifdef WIN32
         char errstr[200];
         sprintf(errstr, "Failed to open printer:\n  %s", PrinterFileName);
-        MessageBox(GETHWND,errstr,"BBC Emulator",MB_OK|MB_ICONERROR);
+        MessageBox(GETHWND,errstr,WindowTitle,MB_OK|MB_ICONERROR);
 #else
         cerr << "Failed to open printer " << PrinterFileName << "\n";
 #endif

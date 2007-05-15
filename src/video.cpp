@@ -175,14 +175,14 @@ static void BuildMode7Font(void) {
   char TxtFnt[256];
   /* cout <<"Building mode 7 font data structures\n"; */
  // Build enhanced mode 7 font
-  strcpy(TxtFnt,RomPath);
+  strcpy(TxtFnt,mainWin->GetAppPath());
   strcat(TxtFnt,"teletext.fnt");
   m7File=fopen(TxtFnt,"rb");
   if (m7File == NULL)
   {
     char errstr[200];
     sprintf(errstr, "Cannot open Teletext font file teletext.fnt");
-    MessageBox(GETHWND,errstr,"BBC Emulator",MB_OK|MB_ICONERROR);
+    MessageBox(GETHWND,errstr,WindowTitle,MB_OK|MB_ICONERROR);
     exit(1);
   }
   for (m7cc=32;m7cc<=127;m7cc++) {
@@ -844,6 +844,7 @@ static void DoMode7Row(void) {
             CurrentCol[CurrentScanLine]=col;
             CurrentStartX[CurrentScanLine]=CurrentX;
             CurrentLen[CurrentScanLine]=12*XStep;
+
           }; /* same colour */
         } else {
           for(CurrentPixel=0x800;CurrentPixel;CurrentPixel=CurrentPixel>>1) {
@@ -1351,8 +1352,13 @@ void VideoAddLEDs(void) {
         mainWin->doLED(24,LEDs.ShiftLock);
     }
     if (LEDs.ShowDisc)  {
-        mainWin->doLED((TeletextEnabled)?532:618,LEDs.Disc0);
-        mainWin->doLED((TeletextEnabled)?542:628,LEDs.Disc1);
+        int adj = (TeletextEnabled ? 86 : 0);
+        mainWin->doLED(578-adj,LEDs.HDisc[0]);
+        mainWin->doLED(588-adj,LEDs.HDisc[1]);
+        mainWin->doLED(598-adj,LEDs.HDisc[2]);
+        mainWin->doLED(608-adj,LEDs.HDisc[3]);
+        mainWin->doLED(618-adj,LEDs.Disc0);
+        mainWin->doLED(628-adj,LEDs.Disc1);
     }
 }
 

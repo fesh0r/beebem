@@ -13,6 +13,7 @@ void LoadCSW(char *file);
 void CloseCSW(void);
 int csw_data(void);
 int csw_poll(int clock);
+void map_csw_file(void);
 
 extern FILE *csw_file;
 extern unsigned char file_buf[BUFFER_LEN];

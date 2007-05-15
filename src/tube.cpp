@@ -35,6 +35,7 @@
 #include "uefstate.h"
 #include "z80mem.h"
 #include "z80.h"
+#include "Arm.h"
 
 #ifdef WIN32
 #include <windows.h>
@@ -367,7 +368,7 @@ void WriteTorchTubeFromParasiteSide(unsigned char IOAddr,unsigned char IOData)
 unsigned char ReadTubeFromHostSide(unsigned char IOAddr) {
     unsigned char TmpData,TmpCntr;
 
-    if (! (EnableTube || Tube186Enabled || AcornZ80) )
+    if (! (EnableTube || Tube186Enabled || AcornZ80 || ArmTube) )
         return(MachineType==3 ? 0xff : 0xfe); // return ff for master else return fe
 
     switch (IOAddr) {
@@ -433,7 +434,7 @@ unsigned char ReadTubeFromHostSide(unsigned char IOAddr) {
 }
 
 void WriteTubeFromHostSide(unsigned char IOAddr,unsigned char IOData) {
-    if (! (EnableTube || Tube186Enabled || AcornZ80) )
+    if (! (EnableTube || Tube186Enabled || AcornZ80 || ArmTube) )
         return;
 
     if (DebugEnabled) {
@@ -1104,7 +1105,7 @@ INLINE static void BadInstrHandler(int opcode) {
         sprintf(errstr,"Unsupported 65C02 instruction 0x%02X at 0x%04X\n"
             "  OK - instruction will be skipped\n"
             "  Cancel - dump memory and exit",opcode,TubeProgramCounter-1);
-        if (MessageBox(GETHWND,errstr,"BBC Emulator",MB_OKCANCEL|MB_ICONERROR) == IDCANCEL)
+        if (MessageBox(GETHWND,errstr,WindowTitle,MB_OKCANCEL|MB_ICONERROR) == IDCANCEL)
         {
             exit(0);
         }
@@ -1383,7 +1384,7 @@ void Reset65C02(void) {
   //The fun part, the tube OS is copied from ROM to tube RAM before the processor starts processing
   //This makes the OS "ROM" writable in effect, but must be restored on each reset.
   strcpy(TubeRomName,RomPath);
-  strcat(TubeRomName,"/beebfile/6502Tube.rom");
+  strcat(TubeRomName,"beebfile/6502Tube.rom");
   TubeRom=fopen(TubeRomName,"rb");
   if (TubeRom!=NULL) {
       fread(TubeRam+0xf800,1,2048,TubeRom);

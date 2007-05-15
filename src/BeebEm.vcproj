@@ -61,7 +61,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="vfw32.lib zdll.lib winmm.lib ws2_32.lib ddraw.lib dsound.lib sapi.lib"
+				AdditionalDependencies="vfw32.lib zdll.lib winmm.lib ws2_32.lib ddraw.lib dsound.lib sapi.lib d3d9.lib shfolder.lib"
 				OutputFile="../BeebEm.exe"
 				LinkIncremental="2"
 				GenerateDebugInformation="true"
@@ -137,7 +137,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="vfw32.lib zdll.lib winmm.lib ws2_32.lib ddraw.lib dsound.lib sapi.lib"
+				AdditionalDependencies="vfw32.lib zdll.lib winmm.lib ws2_32.lib ddraw.lib dsound.lib sapi.lib d3d9.lib shfolder.lib"
 				OutputFile="../BeebEm.exe"
 				LinkIncremental="1"
 				GenerateDebugInformation="true"
@@ -185,6 +185,14 @@
 				>
 			</File>
 			<File
+				RelativePath=".\Arm.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\ArmDisassembler.cpp"
+				>
+			</File>
+			<File
 				RelativePath=".\atodconv.cpp"
 				>
 			</File>
@@ -202,6 +210,22 @@
 			</File>
 			<File
 				RelativePath=".\beebwin.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\beebwindx.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\beebwinio.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\beebwinprefs.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\beebwinspeech.cpp"
 				>
 			</File>
 			<File
@@ -319,6 +343,14 @@
 				>
 			</File>
 			<File
+				RelativePath=".\Arm.h"
+				>
+			</File>
+			<File
+				RelativePath=".\ArmDisassembler.h"
+				>
+			</File>
+			<File
 				RelativePath=".\atodconv.h"
 				>
 			</File>
@@ -348,6 +380,10 @@
 			</File>
 			<File
 				RelativePath=".\cRegistry.h"
+				>
+			</File>
+			<File
+				RelativePath=".\csw.h"
 				>
 			</File>
 			<File
@@ -407,11 +443,19 @@
 				>
 			</File>
 			<File
+				RelativePath=".\serialdevices.h"
+				>
+			</File>
+			<File
 				RelativePath=".\speech.h"
 				>
 			</File>
 			<File
 				RelativePath=".\sysvia.h"
+				>
+			</File>
+			<File
+				RelativePath=".\TarmacGlobals.h"
 				>
 			</File>
 			<File

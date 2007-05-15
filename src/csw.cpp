@@ -130,6 +130,12 @@ void LoadCSW(char *file)
     TapeClock = 0;
     OldClock = 0;
     TapeTrigger = TotalCycles + CSW_CYCLES;
+
+    if (TapeControlEnabled)
+    {
+        map_csw_file();
+        TapeControlOpenFile(UEFTapeName);
+    }
 }
 
 void CloseCSW(void)
@@ -143,33 +149,242 @@ void CloseCSW(void)
     }
 }
 
+void HexDump(char *buff, int count)
+{
+int a, b;
+int v;
+char info[80];
+
+    for (a = 0; a < count; a += 16)
+    {
+        sprintf(info, "%04X  ", a);
+
+        for (b = 0; b < 16; ++b)
+        {
+            sprintf(info+strlen(info), "%02X ", buff[a+b]);
+        }
+
+        for (b = 0; b < 16; ++b)
+        {
+            v = buff[a+b];
+            if (v < 32 || v > 127)
+                v = '.';
+            sprintf(info+strlen(info), "%c", v);
+        }
+
+        WriteLog("%s\n", info);
+    }
+
+}
+
+void map_csw_file(void)
+
+{
+int data;
+int last_state = -1;
+char block[65535];
+int block_ptr = -1;
+int start_time;
+
+int n;
+int blk_num;
+char name[11];
+bool std_last_block = true;
+int last_tone = 0;
+
+    Clk_Divide = 16;
+
+    memset(map_desc, 0, sizeof(map_desc));
+    memset(map_time, 0, sizeof(map_time));
+    start_time = 0;
+    map_lines = 0;
+    blk_num = 0;
+
+    while  ((unsigned long)csw_ptr + 4 < csw_bufflen)
+    {
+
+again : ;
+
+        last_state = csw_state;
+        data = csw_poll(0);
+        if ( (last_state == 1) && (csw_state == 2) )
+        {
+            block_ptr = 0;
+            memset(block, 0, 32);
+            start_time = csw_ptr;
+        }
+        if ( (last_state != csw_state) && (csw_state == 1) )        // Remember start position of last tone state
+            last_tone = csw_ptr;
+
+        if ( (last_state == 2) && (csw_state == 0) && (block_ptr > 0) )
+        {
+
+//          WriteLog("Decoded Block of length %d, starting at %d\n", block_ptr, start_time);
+//          HexDump(block, block_ptr);
+
+            if ( (block_ptr == 1) && (block[0] == 0x80) && (Clk_Divide != 64) )     // 300 baud block ?
+            {
+                Clk_Divide = 64;
+                csw_ptr = last_tone;
+                csw_state = 1;
+//              WriteLog("Detected 300 baud block, resetting ptr to %d\n", csw_ptr);
+                goto again;
+            }
+
+            if ( (block_ptr == 3) && (Clk_Divide != 16) )                           // 1200 baud block ?
+            {
+                Clk_Divide = 16;
+                csw_ptr = last_tone;
+                csw_state = 1;
+//              WriteLog("Detected 1200 baud block, resetting ptr to %d\n", csw_ptr);
+                goto again;
+            }
+
+            // End of block, standard header?
+            if (block_ptr > 20 && block[0] == 0x2A)
+            {
+                if (!std_last_block)
+                {
+                    // Change of block type, must be first block
+                    blk_num=0;
+                    if (map_lines > 0 && map_desc[map_lines-1][0] != 0)
+                    {
+                        strcpy(map_desc[map_lines], "");
+                        map_time[map_lines]=start_time;
+                        map_lines++;
+
+                    }
+                }
+
+                // Pull file name from block
+                n = 1;
+                while (block[n] != 0 && block[n] >= 32 && n <= 10)
+                {
+                    name[n-1] = block[n];
+                    n++;
+                }
+                name[n-1] = 0;
+                if (name[0] != 0)
+                    sprintf(map_desc[map_lines], "%-12s %02X  Length %04X", name, blk_num, block_ptr);
+                else
+                    sprintf(map_desc[map_lines], "<No name>    %02X  Length %04X", blk_num, block_ptr);
+
+                map_time[map_lines]=start_time;
+
+                // Is this the last block for this file?
+                if (block[strlen(name) + 14] & 0x80)
+                {
+                    blk_num=-1;
+                    ++map_lines;
+                    strcpy(map_desc[map_lines], "");
+                    map_time[map_lines]=csw_ptr;
+                }
+                std_last_block=true;
+            }
+            else
+            {
+
+                if (std_last_block)
+                {
+                    // Change of block type, must be first block
+                    blk_num=0;
+                    if (map_lines > 0 && map_desc[map_lines-1][0] != 0)
+                    {
+                        strcpy(map_desc[map_lines], "");
+                        map_time[map_lines]=csw_ptr;
+                        map_lines++;
+                    }
+                }
+
+                sprintf(map_desc[map_lines], "Non-standard %02X  Length %04X", blk_num, block_ptr);
+                map_time[map_lines]=start_time;
+                std_last_block=false;
+            }
+
+            // Data block recorded
+            map_lines++;
+            blk_num = (blk_num + 1) & 255;
+
+            block_ptr = -1;
+        }
+
+        if ( (data != -1) && (block_ptr >= 0) )
+        {
+            block[block_ptr++] = data;
+        }
+    }
+
+//  for (int i = 0; i < map_lines; i++)
+//      WriteLog("%s, %d\n", map_desc[i], map_time[i]);
+
+    csw_state = 0;
+    csw_bit = 0;
+    csw_pulselen = 0;
+    csw_ptr = 0;
+    csw_pulsecount = -1;
+    csw_tonecount = 0;
+    bit_count = -1;
+
+}
+
 int csw_data(void)
 {
+int i;
+int j;
+int t;
+static int last = -1;
 
-    csw_pulsecount++;
+    t = 0;
+    j = 1;
 
-    if (csw_buff[csw_ptr] == 0)
+    if (last != Clk_Divide)
     {
-        if (csw_ptr + 4 < (int)csw_bufflen)
+//      WriteLog("Baud Rate changed to %s\n", (Clk_Divide == 16) ? "1200" : "300");
+        last = Clk_Divide;
+    }
+
+    if (Clk_Divide == 16) j = 1;        // 1200 baud
+    if (Clk_Divide == 64) j = 4;        // 300 baud
+
+/*
+ * JW 18/11/06
+ * For 300 baud, just average 4 samples
+ * Really need to adjust clock speed as well, as we are loading 300 baud 4 times too quick !
+ * But it works
+ */
+
+    if (csw_state < 2)                  // Only read 1 bit whilst looking for start bit
+        j = 1;
+
+    for (i = 0; i < j; ++i)
+    {
+        csw_pulsecount++;
+
+        if (csw_buff[csw_ptr] == 0)
         {
-            csw_ptr++;
-            csw_pulselen = csw_buff[csw_ptr] + (csw_buff[csw_ptr + 1] << 8) + (csw_buff[csw_ptr + 2] << 16) + (csw_buff[csw_ptr + 3] << 24);
-            csw_ptr+= 4;
+            if ((unsigned long)csw_ptr + 4 < csw_bufflen)
+            {
+                csw_ptr++;
+                csw_pulselen = csw_buff[csw_ptr] + (csw_buff[csw_ptr + 1] << 8) + (csw_buff[csw_ptr + 2] << 16) + (csw_buff[csw_ptr + 3] << 24);
+                csw_ptr+= 4;
+            }
+            else
+            {
+                csw_pulselen = -1;
+                csw_state = 0;
+                return csw_pulselen;
+            }
         }
         else
         {
-            csw_pulselen = -1;
-            csw_state = 0;
+            csw_pulselen = csw_buff[csw_ptr++];
         }
-    }
-    else
-    {
-        csw_pulselen = csw_buff[csw_ptr++];
+        t = t + csw_pulselen;
     }
 
-    //  WriteLog("Pulse %d, duration %d\n", csw_pulsecount, csw_pulselen);
+//  WriteLog("Pulse %d, duration %d\n", csw_pulsecount, csw_pulselen);
 
-    return csw_pulselen;
+    return t / j;
 
 }
 
@@ -197,7 +412,7 @@ int ret;
         return ret;
     }
 
-    //  WriteLog("csw_pulsecount %d, csw_bit %d\n", csw_pulsecount, csw_bit);
+//  WriteLog("csw_pulsecount %d, csw_bit %d\n", csw_pulsecount, csw_bit);
 
     switch (csw_state)
     {
@@ -208,9 +423,11 @@ int ret;
                 csw_tonecount++;
                 if (csw_tonecount > 20)                 /* Arbitary figure */
                 {
-                    WriteLog("Detected tone at %d\n", csw_pulsecount);
+//                  WriteLog("Detected tone at %d\n", csw_pulsecount);
                     csw_state = 1;
                 }
+            } else {
+                csw_tonecount = 0;
             }
             break;
 
@@ -223,8 +440,14 @@ int ret;
             } else
             if ( (csw_pulselen > 0x0d) && (csw_pulselen < 0x14) )           /* Not in tone any more - data start bit */
             {
-                WriteLog("Entered data at %d\n", csw_pulsecount);
+//              WriteLog("Entered data at %d\n", csw_pulsecount);
+
+                if (Clk_Divide == 64) { csw_data();  csw_data(); csw_data(); }  // Skip 300 baud data
+
                 bit_count = csw_data();                 /* Skip next half of wave */
+
+                if (Clk_Divide == 64) { csw_data();  csw_data(); csw_data(); }  // Skip 300 baud data
+
                 csw_state = 2;
                 csw_bit = 0;
                 csw_byte = 0;
@@ -258,6 +481,7 @@ int ret;
                     if (csw_bit == 8)
                     {
                         ret = csw_byte;
+//                      WriteLog("Returned data byte of %02x at %d\n", ret, csw_pulsecount);
                         csw_datastate = 1;              /* Stop bits */
                     }
                     break;
@@ -292,7 +516,7 @@ int ret;
 
                     if (csw_pulselen <= 0x0d)           /* Back in tone again */
                     {
-                        WriteLog("Back in tone again at %d\n", csw_pulsecount);
+//                      WriteLog("Back in tone again at %d\n", csw_pulsecount);
                         csw_state = 0;
                         csw_tonecount = 0;
                         csw_bit = 0;

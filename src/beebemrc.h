@@ -140,15 +140,12 @@
 #define IDM_DISC                        40002
 #define IDM_LOADDISC0                   40002
 #define IDM_EXIT                        40003
-#define IDM_640X256                     40004
 #define IDM_320X256                     40005
 #define IDM_640X512                     40006
 #define IDM_800X600                     40007
 #define IDM_1024X768                    40008
 #define IDM_1024X512                    40009
 #define IDM_SPEEDANDFPS                 40010
-#define IDM_240X192                     40011
-#define IDM_160X128                     40012
 #define IDM_SOUNDONOFF                  40013
 #define IDM_44100KHZ                    40014
 #define IDM_22050KHZ                    40015
@@ -222,8 +219,6 @@
 #define IDM_PRINTER_COM2                40087
 #define IDM_PRINTER_COM3                40088
 #define IDM_PRINTER_COM4                40089
-#define IDM_DDRAWONOFF                  40090
-#define IDM_DDINVIDEORAM                40091
 #define IDM_DSOUNDONOFF                 40092
 #define IDM_FREEZEINACTIVE              40093
 #define ID_MONITOR_RGB                  40095
@@ -233,7 +228,6 @@
 #define ID_VIEW_DD_640X480              40099
 #define ID_VIEW_DD_1024X768             40100
 #define ID_VIEW_DD_1280X1024            40101
-#define IDM_DD32ONOFF                   40102
 #define ID_FILE_RESET                   40103
 #define ID_MODELB                       40105
 #define ID_MASTER128                    40106
@@ -329,6 +323,20 @@
 #define IDM_DISABLEKEYSESCAPE           40213
 #define IDM_DISABLEKEYSSHORTCUT         40214
 #define IDM_DISABLEKEYSALL              40215
+#define IDM_WPONLOAD                    40216
+#define IDM_DISPGDI                     40217
+#define IDM_DISPDDRAW                   40218
+#define IDM_DISPDX9                     40219
+#define IDM_DXSMOOTHING                 40220
+#define ID_VIEW_DD_1280X768             40221
+#define ID_VIEW_DD_1280X960             40222
+#define ID_VIEW_DD_1440X900             40223
+#define ID_VIEW_DD_1600X1200            40224
+#define IDM_1280X1024                   40225
+#define IDM_1440X1080                   40226
+#define IDM_1600X1200                   40227
+#define ID_UPRM                         40228
+#define IDM_ARM                         40229
 #define IDC_STATIC                      -1
 
 // Next default values for new objects
@@ -337,7 +345,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NO_MFC                     1
 #define _APS_NEXT_RESOURCE_VALUE        113
-#define _APS_NEXT_COMMAND_VALUE         40216
+#define _APS_NEXT_COMMAND_VALUE         40230
 #define _APS_NEXT_CONTROL_VALUE         1065
 #define _APS_NEXT_SYMED_VALUE           101
 #endif

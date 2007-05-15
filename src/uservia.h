@@ -30,6 +30,7 @@
 
 extern VIAState UserVIAState;
 extern unsigned char WTDelay1,WTDelay2;
+extern int RTC_Enabled;
 
 void UserVIAWrite(int Address, int Value);
 int UserVIARead(int Address);

@@ -50,6 +50,7 @@
 #include "econet.h"
 #include "scsi.h"
 #include "debug.h"
+#include "Arm.h"
 
 #ifdef WIN32
 #define INLINE inline
@@ -69,6 +70,7 @@ int IgnoreIllegalInstructions = 1;
 static int CurrentInstruction;
 
 extern int DumpAfterEach;
+extern CArm *arm;
 
 CycleCountT TotalCycles=0;
 
@@ -513,7 +515,7 @@ INLINE static void BRKInstrHandler(void) {
   char errstr[250];
   if (CPUDebug) {
   sprintf(errstr,"BRK Instruction at 0x%04x after %i instructions. ACCON: 0x%02x ROMSEL: 0x%02x",ProgramCounter,InstrCount,ACCCON,PagedRomReg);
-  MessageBox(GETHWND,errstr,"BBC Emulator",MB_OKCANCEL|MB_ICONERROR);
+  MessageBox(GETHWND,errstr,WindowTitle,MB_OKCANCEL|MB_ICONERROR);
   //fclose(InstrLog);
   exit(1);
   }
@@ -632,7 +634,7 @@ INLINE static void JSRInstrHandler(int16 address) {
   /*if (ProgramCounter==0xffdd) {
       char errstr[250];
       sprintf(errstr,"OSFILE called\n");
-      MessageBox(GETHWND,errstr,"BBC Emulator",MB_OKCANCEL|MB_ICONERROR);
+      MessageBox(GETHWND,errstr,WindowTitle,MB_OKCANCEL|MB_ICONERROR);
   }*/
 
 } /* JSRInstrHandler */
@@ -790,7 +792,7 @@ INLINE static void BadInstrHandler(int opcode) {
         sprintf(errstr,"Unsupported 6502 instruction 0x%02X at 0x%04X\n"
             "  OK - instruction will be skipped\n"
             "  Cancel - dump memory and exit",opcode,ProgramCounter-1);
-        if (MessageBox(GETHWND,errstr,"BBC Emulator",MB_OKCANCEL|MB_ICONERROR) == IDCANCEL)
+        if (MessageBox(GETHWND,errstr,WindowTitle,MB_OKCANCEL|MB_ICONERROR) == IDCANCEL)
         {
             beebmem_dumpstate();
             exit(0);
@@ -1166,6 +1168,11 @@ void Exec6502Instruction(void) {
 
         z80_execute();
 
+        if (Enable_Arm)
+        {
+            arm->exec(4);
+        }
+
         if (Tube186Enabled)
             i186_execute(12 * 4);
 
@@ -1406,7 +1413,7 @@ void Exec6502Instruction(void) {
                 /*if (ProgramCounter==0xffdd) {
                 char errstr[250];
                 sprintf(errstr,"OSFILE called\n");
-                MessageBox(GETHWND,errstr,"BBC Emulator",MB_OKCANCEL|MB_ICONERROR);
+                MessageBox(GETHWND,errstr,WindowTitle,MB_OKCANCEL|MB_ICONERROR);
                 }*/
                 break;
             case 0x4d:
