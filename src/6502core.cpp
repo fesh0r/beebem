@@ -1513,7 +1513,7 @@ void Exec6502Instruction(void) {
                 if (MachineType==3) {
                     YReg=Pop(); /* PLY */
                     PSR&=~(FlagZ | FlagN);
-                    PSR|=((XReg==0)<<1) | (YReg & 128);
+                    PSR|=((YReg==0)<<1) | (YReg & 128);
                 }
                 break;
             case 0x7c:

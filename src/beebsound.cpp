@@ -867,8 +867,8 @@ void Sound_RegWrite(int value) {
     };
    //if (VolChange<4) fprintf(sndlog,"Channel %d - Volume %d at %lu Cycles\n",VolChange,value &15,SoundCycles);
   };
-  if /*(*/(trigger)/* && (!ReloadingChip))*/
-    SoundTrigger_Real();
+//  if /*(*/(trigger)/* && (!ReloadingChip))*/
+//    SoundTrigger_Real();
 }; /* Sound_RegWrite */
 
 

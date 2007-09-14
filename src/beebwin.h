@@ -45,6 +45,15 @@ static unsigned char CFG_DISABLE_WINDOWS_KEYS[24] = {
     00,00,00,00,00,00,00,00,03,00,00,00,00,00,0x5B,0xE0,00,00,0x5C,0xE0,00,00,00,00
 };
 
+typedef struct KeyMapping {
+    int row;    // Beeb row
+    int col;    // Beeb col
+    int shift;  // Beeb shift state
+} KeyMapping;
+
+typedef KeyMapping KeyMap[256][2]; // Indices are: [Virt key][shift state]
+
+
 extern const char *WindowTitle;
 
 typedef union EightUChars {
@@ -109,10 +118,11 @@ class BeebWin  {
 
     enum PaletteType { RGB, BW, AMBER, GREEN } palette_type;
 
-    void Initialise();
-
     BeebWin();
     ~BeebWin();
+
+    void Initialise();
+    void Shutdown();
 
     void UpdateModelType();
     void SetSoundMenu(void);
@@ -245,6 +255,7 @@ class BeebWin  {
     int         m_MenuIdKeyMapping;
     int         m_KeyMapAS;
     int         m_KeyMapFunc;
+    char        m_UserKeyMapPath[_MAX_PATH];
     int         m_ShiftPressed;
     int         m_vkeyPressed[256][2][2];
     char        m_AppPath[_MAX_PATH];
@@ -259,6 +270,10 @@ class BeebWin  {
     int         m_DisplayRenderer;
     int         m_DDFullScreenMode;
     bool        m_isFullScreen;
+    bool        m_AutoSavePrefsCMOS;
+    bool        m_AutoSavePrefsFolders;
+    bool        m_AutoSavePrefsAll;
+    bool        m_AutoSavePrefsChanged;
 
     HDC         m_hDC;
     HWND        m_hWnd;
@@ -402,12 +417,16 @@ class BeebWin  {
     void TextView(void);
     void TextViewSetCursorPos(int line, int col);
     BOOL RebootSystem(void);
+    void LoadUserKeyMap(void);
+    void SaveUserKeyMap(void);
+    bool ReadKeyMap(char *filename, KeyMap *keymap);
+    bool WriteKeyMap(char *filename, KeyMap *keymap);
 
     // Preferences
     PrefsMap m_Prefs;
     char m_PrefsFile[_MAX_PATH];
     void LoadPreferences(void);
-    void SavePreferences(void);
+    void SavePreferences(bool saveAll);
     bool PrefsGetBinaryValue(const char *id, void *bin, int binsize);
     void PrefsSetBinaryValue(const char *id, void *bin, int binsize);
     bool PrefsGetStringValue(const char *id, char *str);

@@ -34,6 +34,26 @@ You can download more disc images from internet sites such as these:
 Put the disc image files into the 'DiscIms' directory.
 
 
+BeebEm FAQ
+----------
+
+Some commonly asked questions:
+
+Q1. How do you change the default folder for loading disks or tapes?
+
+A1. On the Options menu, enable this option:
+
+      Preference Options -> Save Disc/Tape/State Folders
+
+    BeebEm will remember the folder you last loaded a disk or tape from
+    and default to that the next time you select load.
+
+Q2. How do you open the menus in full screen mode?
+
+A2. Move the mouse cursor to the top left of the screen and press Alt+F to
+    open the File menu.
+
+
 Configuring BeebEm
 ------------------
 
@@ -135,15 +155,28 @@ these are not:
    '@               :*
    End              Copy
 
-With logical mapping the key symbols are mapped directly (for a UK PC
-keyboard at least) so you get what you press.  Note that logical mapping
-sometimes has to change the shift key state in order to work so it can do
-some unexpected things if you use it while playing a game that uses shift.
-Its probably better to use default mapping when playing games.
+With a logical mapping the key symbols are mapped directly so you get what
+you press.  Note that the logical mapping sometimes has to change the shift
+key state in order to work so it can do some unexpected things if you use it
+while playing a game that uses shift.  Its probably better to use default
+mapping when playing games.
 
-If you do not use a UK keyboard then you may want to set up your own
-mapping.  Use the 'user keyboard' mapping options in BeebEm to do this and
-remember to save it using the 'save preferences' option.
+Key mappings are kept in .kmap files stored in the My Documents\BeebEm area.
+BeebEm will read the Default.kmap and Logical.kmap files at start up.  These
+files contain mappings for a UK PC keyboard and they can be replaced with
+alternative mapping files if you are not using a UK keyboard (for example,
+the USLogical.kmap file for a US keyboard).
+
+To set up your own mappings use the 'define user key mapping' option in
+BeebEm.  Click on one of the BBC Micro keys and you will be prompted twice,
+first for the PC key to map to the unshifted Beeb key press and second for
+the PC key to map to the shifted Beeb key press.  When pressing a PC key you
+can tick the 'shift' box in the key prompt to map a shifted PC key to the
+prompted Beeb key (confused yet?)
+
+Remember to save your key mapping using the 'save user key mapping' option.
+Also use the 'save preferences' to save the default user key mapping file
+that gets loaded when BeebEm starts up.
 
 The keypad +/- keys will change between the BeebEm fixed speeds.
 
@@ -799,15 +832,15 @@ Options Menu:
                          BeebEm window (useful when using the Mousestick or
                          the AMX mouse).
 
-  Define User Keyboard - Allows you to define your own keyboard mapping.
-                         Click on one of the BBC Micro keys and then press
-                         the key you want mapped to it (most will already
-                         be mapped to the correct keys).  Once you have
-                         defined the keys you want select the 'user mapping'
-                         and remember to save it using the 'Save
-                         Preferences' option.
+  Define User Key Mapping - Allows you to define your own keyboard mapping.
+                            See the Keyboard Mappings section above.
 
-  User Defined Mapping - Selects the user defined keyboard mapping.
+  Load User Key Mapping - Loads a user defined key mapping from a file.
+
+  Save User Key Mapping - Saves a user defined key mapping to a file.
+
+  User Defined Mapping - Selects the currently loaded user defined keyboard
+                         mapping.
 
   Default Keyboard Mapping - See the Keyboard Mappings section above.
   Logical Keyboard Mapping
@@ -830,6 +863,16 @@ Options Menu:
                          preferences file.  Settings include the selected
                          menu options, user defined keyboard, Window
                          position and CMOS RAM contents.
+
+  Autosave CMOS RAM    - Automatically saves the Master 128 CMOS RAM
+                         on exit from BeebEm.
+
+  Autosave All Prefs   - Automatically saves all preferences on exit from
+                         BeebEm.
+
+  Save Disc/Tape/State Folders - When enabled BeebEm will remember where
+                         the folders where you last loaded or saved disc,
+                         tape or state files.
 
 Help Menu:
 
@@ -1123,6 +1166,9 @@ Thanks go to the following people for contributing to BeebEm:
   Ken Lowe
   Jon Welch
   Rob O'Donnell
+
+Thanks also to Jordon Russell Software for the excellent Inno Setup
+installation software: <http://www.jrsoftware.org/isinfo.php>
 
 If there are any other features you would like to see in the Windows version
 of BeebEm then send me an email.  I cannot promise anything but I may find
