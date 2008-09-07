@@ -71,7 +71,8 @@ unsigned char CMA2;
 CArm *arm = NULL;
 
 unsigned char HideMenuEnabled;
-bool MenuOn;
+unsigned char DisableMenu = 0;
+bool MenuOn = true;
 
 struct LEDType LEDs;
 char DiscLedColour=0; // 0 for red, 1 for green.
@@ -93,7 +94,7 @@ static const char *AboutText =
     "BBC Micro Model B Plus (128)\nAcorn Master 128\nAcorn 65C02 Second Processor\n"
     "Torch Z80 Second Processor\nMaster 512 Second Processor\nAcorn Z80 Second Processor\n"
     "ARM Second Processor\n\n"
-    "Version 3.8, September 2007";
+    "Version 3.85, September 2008";
 
 /* Prototypes */
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
@@ -154,6 +155,12 @@ BeebWin::BeebWin()
     m_AutoSavePrefsFolders = false;
     m_AutoSavePrefsAll = false;
     m_AutoSavePrefsChanged = false;
+    memset(m_KbdCmd, 0, sizeof(m_KbdCmd));
+    m_KbdCmdPos = -1;
+    m_KbdCmdPress = false;
+    m_KbdCmdDelay = 40;
+    m_KbdCmdLastCycles = 0;
+    m_NoAutoBoot = false;
 
     /* Get the applications path - used for non-user files */
     char app_path[_MAX_PATH];
@@ -217,6 +224,9 @@ void BeebWin::Initialise()
     InitMenu();
     m_hDC = GetDC(m_hWnd);
 
+    // Will hide menu if necessary
+    ShowMenu(TRUE);
+
     if (m_DisplayRenderer != IDM_DISPGDI)
         InitDX();
 
@@ -251,6 +261,10 @@ void BeebWin::Initialise()
 
     // Boot file if passed on command line
     HandleCommandLineFile();
+
+    // Schedule first key press if keyboard command supplied
+    if (m_KbdCmd[0] != 0)
+        SetTimer(m_hWnd, 1, 1000, NULL);
 }
 
 /****************************************************************************/
@@ -519,6 +533,9 @@ void BeebWin::CreateBeebWindow(void)
 }
 
 void BeebWin::ShowMenu(bool on) {
+ if (DisableMenu)
+  on=FALSE;
+
  if (on!=MenuOn) {
   if (on)
     SetMenu(m_hWnd, m_hMenu);
@@ -613,6 +630,7 @@ void BeebWin::InitMenu(void)
     CheckMenuItem(hMenu, IDM_AUTOSAVE_PREFS_FOLDERS, m_AutoSavePrefsFolders ? MF_CHECKED : MF_UNCHECKED);
     CheckMenuItem(hMenu, IDM_AUTOSAVE_PREFS_ALL, m_AutoSavePrefsAll ? MF_CHECKED : MF_UNCHECKED);
 
+    CheckMenuItem(hMenu, ID_SHOWCURSORLINE, ShowCursorLine ? MF_CHECKED : MF_UNCHECKED);
     UpdateMonitorMenu();
     UpdateDisableKeysMenu();
 
@@ -1102,6 +1120,10 @@ LRESULT CALLBACK WndProc(
             mainWin->ReinitDX();
             break;
 
+        case WM_TIMER:
+            mainWin->HandleTimer();
+            break;
+
         default:          // Passes it on if unproccessed
             return (DefWindowProc(hWnd, message, uParam, lParam));
         }
@@ -1219,6 +1241,31 @@ int BeebWin::StartOfFrame(void)
 
     if (UpdateTiming())
         FrameNum = 0;
+
+    // Force video frame rate to match AVI capture rate to avoid
+    // video and sound getting out of sync
+    if (aviWriter != NULL)
+    {
+        m_AviFrameSkipCount++;
+        if (m_AviFrameSkipCount > m_AviFrameSkip)
+        {
+            m_AviFrameSkipCount = 0;
+            FrameNum = 0;
+        }
+        else
+        {
+            FrameNum = 1;
+        }
+
+        // Ensure that frames captured each second (50 frames) matches
+        // the AVI capture FPS rate
+        m_AviFrameCount++;
+        if (m_AviFrameCount >= 50)
+        {
+            m_AviFrameCount = 0;
+            m_AviFrameSkipCount = 0;
+        }
+    }
 
     return FrameNum;
 }
@@ -2877,6 +2924,11 @@ void BeebWin::HandleCommand(int MenuId)
         }
         UpdateDisableKeysMenu();
         break;
+
+    case ID_SHOWCURSORLINE:
+        ShowCursorLine = 1 - ShowCursorLine;
+        CheckMenuItem(hMenu, ID_SHOWCURSORLINE, ShowCursorLine ? MF_CHECKED : MF_UNCHECKED);
+        break;
     }
 
     SetSound(UNMUTED);
@@ -2932,7 +2984,15 @@ void BeebWin::ParseCommandLine()
     i = 1;
     while (i < __argc)
     {
-        if (__argv[i][0] == '-' && i+1 >= __argc)
+        if (_stricmp(__argv[i], "-DisMenu") == 0)
+        {
+            DisableMenu = 1;
+        }
+        else if (_stricmp(__argv[i], "-NoAutoBoot") == 0)
+        {
+            m_NoAutoBoot = true;
+        }
+        else if (__argv[i][0] == '-' && i+1 >= __argc)
         {
             sprintf(errstr,"Invalid command line parameter:\n  %s", __argv[i]);
             MessageBox(m_hWnd,errstr,WindowTitle,MB_OK|MB_ICONERROR);
@@ -2983,6 +3043,10 @@ void BeebWin::ParseCommandLine()
                 else
                     EconetFlagFillTimeout = a;
             }
+            else if (_stricmp(__argv[i], "-KbdCmd") == 0)
+            {
+                strncpy(m_KbdCmd, __argv[++i], 1024);
+            }
             else if (__argv[i][0] == '-')
             {
                 invalid = true;
@@ -3017,8 +3081,9 @@ void BeebWin::HandleCommandLineFile()
     char TmpPath[_MAX_PATH];
     char *FileName = NULL;
     bool uef = false;
+    bool csw = false;
 
-    // See if disc image is readable
+    // See if file is readable
     if (m_CommandLineFileName != NULL)
     {
         FileName = m_CommandLineFileName;
@@ -3038,8 +3103,15 @@ void BeebWin::HandleCommandLineFile()
                 adfs = true;
             else if (_stricmp(ext+1, "uef") == 0)
                 uef = true;
+            else if (_stricmp(ext+1, "csw") == 0)
+                csw = true;
             else
+            {
+                char errstr[200];
+                sprintf(errstr,"Unrecognised file type:\n  %s", FileName);
+                MessageBox(m_hWnd,errstr,WindowTitle,MB_OK|MB_ICONERROR);
                 cont = false;
+            }
         }
     }
 
@@ -3066,6 +3138,34 @@ void BeebWin::HandleCommandLineFile()
                 FileName = TmpPath;
                 fclose(fd);
             }
+            else
+            {
+                // Try getting it from Tapes directory
+                strcpy(TmpPath, m_UserDataPath);
+                strcat(TmpPath, "tapes/");
+                strcat(TmpPath, FileName);
+                FILE *fd = fopen(TmpPath, "rb");
+                if (fd != NULL)
+                {
+                    cont = true;
+                    FileName = TmpPath;
+                    fclose(fd);
+                }
+            }
+        }
+        else if (csw)
+        {
+            // Try getting it from Tapes directory
+            strcpy(TmpPath, m_UserDataPath);
+            strcat(TmpPath, "tapes/");
+            strcat(TmpPath, FileName);
+            FILE *fd = fopen(TmpPath, "rb");
+            if (fd != NULL)
+            {
+                cont = true;
+                FileName = TmpPath;
+                fclose(fd);
+            }
         }
         else
         {
@@ -3081,13 +3181,43 @@ void BeebWin::HandleCommandLineFile()
                 fclose(fd);
             }
         }
+
+        if (!cont)
+        {
+            char errstr[200];
+            sprintf(errstr,"Cannot find file:\n  %s", FileName);
+            MessageBox(m_hWnd,errstr,WindowTitle,MB_OK|MB_ICONERROR);
+        }
     }
 
     if (cont)
     {
         if (uef)
         {
-            LoadUEFState(FileName);
+            // Determine if file is a tape or a state file
+            bool stateFile = false;
+            FILE *fd = fopen(FileName, "rb");
+            if (fd != NULL)
+            {
+                char buf[14];
+                fread(buf,14,1,fd);
+                if (strcmp(buf,"UEF File!")==0 && buf[12]==0x6c && buf[13]==0x04)
+                {
+                    stateFile = true;
+                }
+                fclose(fd);
+            }
+
+            if (stateFile)
+                LoadUEFState(FileName);
+            else
+                LoadUEF(FileName);
+
+            cont = false;
+        }
+        else if (csw)
+        {
+            LoadCSW(FileName);
             cont = false;
         }
     }
@@ -3129,7 +3259,7 @@ void BeebWin::HandleCommandLineFile()
         }
     }
 
-    if (cont)
+    if (cont && !m_NoAutoBoot)
     {
         // Do a shift + break
         ResetBeebSystem(MachineType,TubeEnabled,0);
@@ -3325,4 +3455,93 @@ bool BeebWin::CheckUserDataPath()
     }
 
     return success;
+}
+
+/****************************************************************************/
+void BeebWin::HandleTimer()
+{
+    int row,col;
+    char delay[10];
+
+    // Do nothing if emulation is not running (e.g. if Window is being moved)
+    if ((TotalCycles - m_KbdCmdLastCycles) / 2000 < m_KbdCmdDelay)
+    {
+        SetTimer(m_hWnd, 1, m_KbdCmdDelay, NULL);
+        return;
+    }
+    m_KbdCmdLastCycles = TotalCycles;
+
+    // Release previous key press (except shift/control)
+    if (m_KbdCmdPress &&
+        m_KbdCmdKey != VK_SHIFT && m_KbdCmdKey != VK_CONTROL)
+    {
+        TranslateKey(m_KbdCmdKey, 1, row, col);
+        m_KbdCmdPress = false;
+        SetTimer(m_hWnd, 1, m_KbdCmdDelay, NULL);
+    }
+    else
+    {
+        m_KbdCmdPos++;
+        if (m_KbdCmd[m_KbdCmdPos] == 0)
+        {
+            KillTimer(m_hWnd, 1);
+        }
+        else
+        {
+            m_KbdCmdPress = true;
+
+            switch (m_KbdCmd[m_KbdCmdPos])
+            {
+            case '\\':
+                m_KbdCmdPos++;
+                switch (m_KbdCmd[m_KbdCmdPos])
+                {
+                case '\\': m_KbdCmdKey = VK_OEM_5; break;
+                case 'n': m_KbdCmdKey = VK_RETURN; break;
+                case 's': m_KbdCmdKey = VK_SHIFT; break;
+                case 'S': m_KbdCmdKey = VK_SHIFT; m_KbdCmdPress = false; break;
+                case 'c': m_KbdCmdKey = VK_CONTROL; break;
+                case 'C': m_KbdCmdKey = VK_CONTROL; m_KbdCmdPress = false; break;
+                case 'd':
+                    m_KbdCmdKey = 0;
+                    m_KbdCmdPos++;
+                    delay[0] = m_KbdCmd[m_KbdCmdPos];
+                    m_KbdCmdPos++;
+                    delay[1] = m_KbdCmd[m_KbdCmdPos];
+                    m_KbdCmdPos++;
+                    delay[2] = m_KbdCmd[m_KbdCmdPos];
+                    m_KbdCmdPos++;
+                    delay[3] = m_KbdCmd[m_KbdCmdPos];
+                    delay[4] = 0;
+                    m_KbdCmdDelay = atoi(delay);
+                    break;
+                default: m_KbdCmdKey = 0; break;
+                }
+                break;
+
+            case '`': m_KbdCmdKey = VK_OEM_8; break;
+            case '-': m_KbdCmdKey = VK_OEM_MINUS; break;
+            case '=': m_KbdCmdKey = VK_OEM_PLUS; break;
+            case '[': m_KbdCmdKey = VK_OEM_4; break;
+            case ']': m_KbdCmdKey = VK_OEM_6; break;
+            case ';': m_KbdCmdKey = VK_OEM_1; break;
+            case '\'': m_KbdCmdKey = VK_OEM_3; break;
+            case '#': m_KbdCmdKey = VK_OEM_7; break;
+            case ',': m_KbdCmdKey = VK_OEM_COMMA; break;
+            case '.': m_KbdCmdKey = VK_OEM_PERIOD; break;
+            case '/': m_KbdCmdKey = VK_OEM_2; break;
+            default: m_KbdCmdKey = m_KbdCmd[m_KbdCmdPos]; break;
+            }
+
+            if (m_KbdCmdKey != 0)
+            {
+                if (m_KbdCmdPress)
+                    TranslateKey(m_KbdCmdKey, 0, row, col);
+                else
+                    TranslateKey(m_KbdCmdKey, 1, row, col);
+            }
+
+            SetTimer(m_hWnd, 1, m_KbdCmdDelay, NULL);
+        }
+    }
 }

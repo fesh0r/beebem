@@ -30,6 +30,7 @@ void ResetTube(void);
 
 extern unsigned char EnableTube,TubeEnabled,Tube186Enabled,AcornZ80;
 extern int TorchTubeActive;
+extern int TubeProgramCounter;
 
 extern unsigned char TubeintStatus; /* bit set (nums in IRQ_Nums) if interrupt being caused */
 extern unsigned char TubeNMIStatus; /* bit set (nums in NMI_Nums) if NMI being caused */

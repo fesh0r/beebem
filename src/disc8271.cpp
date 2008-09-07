@@ -692,7 +692,7 @@ static void FormatInterrupt(void) {
       }
     } else {
       /* Last sector done, write the track back to disc */
-      if (!SaveTrackImage(Selects[0] ? 0 : 1, CURRENTHEAD, CommandStatus.TrackAddr)) {
+      if (SaveTrackImage(Selects[0] ? 0 : 1, CURRENTHEAD, CommandStatus.TrackAddr)) {
         StatusReg=0x10;
         UPDATENMISTATUS;
         LastByte=1;

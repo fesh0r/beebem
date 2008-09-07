@@ -12,6 +12,7 @@
 #include "tube.h"
 #include "beebemrc.h"
 #include "6502core.h"
+#include "tube.h"
 #include "debug.h"
 #include "z80mem.h"
 #include "z80.h"
@@ -36,6 +37,9 @@ static bool DebugParasite = false;
 static HWND hwndDebug;
 static HWND hwndInfo;
 static HWND hwndBP;
+
+#define MAX_BUFFER 65536
+static unsigned char buffer[MAX_BUFFER];
 
 extern HWND hCurrentDialog;
 
@@ -726,7 +730,7 @@ void DebugExecuteCommand()
     char command[MAX_COMMAND_LEN + 1];
     char filename[100 + 1];
     char info[200];
-    int start, end, count;
+    int start, end, count, addr;
     int i;
     bool ok = false;
     bool host = true;
@@ -925,6 +929,100 @@ void DebugExecuteCommand()
             DebugDisplayInfo(info);
 
             SetDlgItemText(hwndDebug, IDC_DEBUGCOMMAND, "");
+        }
+        break;
+    }
+
+    case 'g': // Goto, params: [p] addr
+    {
+        ok = true;
+        i = 1;
+        if (tolower(command[1]) == 'p') // Parasite
+        {
+            host = false;
+            ++i;
+        }
+        sscanf(&command[i], "%x", &addr);
+        addr = addr & 0xffff;
+        if (host)
+            ProgramCounter = addr;
+        else
+            TubeProgramCounter = addr;
+
+        DebugDisplayInfo("");
+        if (host)
+            sprintf(info, "Next host instruction address %x", addr);
+        else
+            sprintf(info, "Next parasite instruction address %x", addr);
+        DebugDisplayInfo(info);
+
+        SetDlgItemText(hwndDebug, IDC_DEBUGCOMMAND, "");
+        break;
+    }
+
+    case 'f': // File read/write
+    {
+        if (tolower(command[1]) == 'r')  // Read, params: filename addr
+        {
+            addr = 0;
+            filename[0] = '\0';
+            if (sscanf(&command[2], "%100s %x", filename, &addr) == 2 &&
+                strlen(filename) != 0 && addr >= 0 && addr <= 0xffff)
+            {
+                ok = true;
+                FILE *fd = fopen(filename, "rb");
+                if (fd)
+                {
+                    count = (int)fread(buffer, 1, MAX_BUFFER, fd);
+                    fclose(fd);
+
+                    for (i = 0; i < count; ++i)
+                        BeebWriteMem((addr + i) & 0xffff, buffer[i] & 0xff);
+
+                    DebugDisplayInfo("");
+                    sprintf(info, "Read %x bytes to address %x", count, addr);
+                    DebugDisplayInfo(info);
+                    SetDlgItemText(hwndDebug, IDC_DEBUGCOMMAND, "");
+                }
+                else
+                {
+                    DebugDisplayInfo("");
+                    sprintf(info, "Failed to open file: %s", filename);
+                    DebugDisplayInfo(info);
+                }
+            }
+        }
+        else if (tolower(command[1]) == 'w')  // Write, params: filename addr count
+        {
+            addr = 0;
+            count = 0;
+            filename[0] = '\0';
+            if (sscanf(&command[2], "%100s %x %x", filename, &addr, &count) == 3 &&
+                strlen(filename) != 0 && addr >= 0 && addr <= 0xffff &&
+                count > 0 && count <= 0x10000)
+            {
+                ok = true;
+                FILE *fd = fopen(filename, "wb");
+                if (fd)
+                {
+                    for (i = 0; i < count; ++i)
+                        buffer[i] = BeebReadMem((addr + i) & 0xffff);
+
+                    count = (int)fwrite(buffer, 1, count, fd);
+                    fclose(fd);
+
+                    DebugDisplayInfo("");
+                    sprintf(info, "Wrote %x bytes from address %x", count, addr);
+                    DebugDisplayInfo(info);
+                    SetDlgItemText(hwndDebug, IDC_DEBUGCOMMAND, "");
+                }
+                else
+                {
+                    DebugDisplayInfo("");
+                    sprintf(info, "Failed to open file: %s", filename);
+                    DebugDisplayInfo(info);
+                }
+            }
         }
         break;
     }

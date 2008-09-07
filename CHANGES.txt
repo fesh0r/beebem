@@ -1,6 +1,50 @@
 BeebEm Change History
 =====================
 
+Version 3.85 (Mike Wyatt)
+------------
+* Fixed disc formatting using the 8271 controller.
+* Video update / capture fix from Rich.
+* Reduced CPU load when execution is halted in the debugger.
+* Added three new debugger commands:
+    "g" to goto an address
+    "fr" to read a file into host RAM
+    "fw" to write a file from host RAM
+
+Version 3.84 (Mike Wyatt)
+------------
+* Added menu option to display cursor line at bottom of screen.
+* Added \d option to -KbdCmd command line parameters
+* Made -KbdCmd processing more resilient
+
+Version 3.83 (Mike Wyatt)
+------------
+* Added -NoAutoBoot command line option.
+
+Version 3.82 (Rich Talbot-Watkins, Mike Wyatt)
+------------
+* Periodic noise emulation tweak from Rich.
+* Video emulation fixes from Rich.
+* AVI capture fix.  When AVI is enabled the video frame rate is now fixed
+  to match the capture rate.  This should stop video and sound getting out
+  of sync.
+* Changed CMOS default for print destination to the parallel port.  Printer
+  options should work correctly in Master mode now.
+* Added support for loading tape images from the command line.
+* Added -KbdCmd command line option to specify a key press sequence to run
+  at start up (can be used to run a tape image).
+
+Version 3.81 (Mike Wyatt, Jon Welch)
+------------
+* Added -DisMenu command line option to disable the menus.
+* Fixed issue where sound output stops after about 10 mins.
+* Corrected the fix in v3.8 for sound artifacts.  Sampled sound works
+  correctly again.
+* Added periodic noise emulation tweak from Rich Talbot-Watkins.
+* Updated instructions for defining user keyboard mappings (thanks to
+  Jonathan Bluestone).
+* Bug fix - Cursor position wrong when in column 1 in editing mode.
+
 Version 3.8 (Mike Wyatt, Jon Welch)
 -----------
 * Enhanced user defined key mapping support.  Shifted and unshifted key

@@ -221,6 +221,7 @@ class BeebWin  {
     void TextToSpeechKey(WPARAM uParam);
     void TextViewSpeechSync(void);
     void TextViewSyncWithBeebCursor(void);
+    void HandleTimer(void);
 
     unsigned char cols[256];
     HMENU       m_hMenu;
@@ -304,6 +305,13 @@ class BeebWin  {
     int         m_MotionBlur;
     char        m_BlurIntensities[8];
     char *      m_CommandLineFileName;
+    char        m_KbdCmd[1024];
+    int         m_KbdCmdPos;
+    int         m_KbdCmdKey;
+    bool        m_KbdCmdPress;
+    int         m_KbdCmdDelay;
+    int         m_KbdCmdLastCycles;
+    bool        m_NoAutoBoot;
 
     // AVI vars
     bmiData     m_Avibmi;
@@ -312,6 +320,7 @@ class BeebWin  {
     char*       m_AviScreen;
     int         m_AviFrameSkip;
     int         m_AviFrameSkipCount;
+    int         m_AviFrameCount;
     int         m_MenuIdAviResolution;
     int         m_MenuIdAviSkip;
 

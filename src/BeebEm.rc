@@ -201,8 +201,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 3,7,0,0
- PRODUCTVERSION 3,7,0,0
+ FILEVERSION 3,8,5,0
+ PRODUCTVERSION 3,8,5,0
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -220,12 +220,12 @@ BEGIN
             VALUE "Comments", "BeebEm - BBC Micro Emulator"
             VALUE "CompanyName", "Mike Wyatt"
             VALUE "FileDescription", "BeebEm"
-            VALUE "FileVersion", "3.8"
+            VALUE "FileVersion", "3.85"
             VALUE "InternalName", "BeebEm"
-            VALUE "LegalCopyright", "Copyright © 2007"
+            VALUE "LegalCopyright", "Copyright © 2008"
             VALUE "OriginalFilename", "BeebEm.exe"
             VALUE "ProductName", "BeebEm"
-            VALUE "ProductVersion", "3.8"
+            VALUE "ProductVersion", "3.85"
         END
     END
     BLOCK "VarFileInfo"
@@ -459,6 +459,7 @@ BEGIN
             MENUITEM "Show &Keyboard LEDs",         ID_SHOW_KBLEDS
             MENUITEM "Show &Disc LEDs",             ID_SHOW_DISCLEDS
         END
+        MENUITEM "Show Bottom Cursor Line",     ID_SHOWCURSORLINE
         POPUP "&Motion Blur"
         BEGIN
             MENUITEM "Off",                         IDM_BLUR_OFF

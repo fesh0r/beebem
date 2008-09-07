@@ -12,8 +12,8 @@ not run see the troubleshooting section below.
 BeebEm is distributed with source code in the Src.zip file so you can
 compile and modify BeebEm yourself.
 
-The copyright on everything in BeebEm resides with David Gilbert, the
-original author, as described in COPYRIGHT.txt.
+The copyright for Beebem is held by David Alan Gilbert and the other authors
+and contributors, as described in COPYRIGHT.txt.
 
 
 Running BBC Micro Software
@@ -155,6 +155,10 @@ these are not:
    '@               :*
    End              Copy
 
+The keypad +/- keys will change between the BeebEm fixed speeds.
+
+The keypad / and * keys will save and load a quickstate file.
+
 With a logical mapping the key symbols are mapped directly so you get what
 you press.  Note that the logical mapping sometimes has to change the shift
 key state in order to work so it can do some unexpected things if you use it
@@ -167,20 +171,42 @@ files contain mappings for a UK PC keyboard and they can be replaced with
 alternative mapping files if you are not using a UK keyboard (for example,
 the USLogical.kmap file for a US keyboard).
 
-To set up your own mappings use the 'define user key mapping' option in
-BeebEm.  Click on one of the BBC Micro keys and you will be prompted twice,
-first for the PC key to map to the unshifted Beeb key press and second for
-the PC key to map to the shifted Beeb key press.  When pressing a PC key you
-can tick the 'shift' box in the key prompt to map a shifted PC key to the
-prompted Beeb key (confused yet?)
+You can create your own mapping to map your PC keyboard to your emulated BBC
+one.  Do this as follows:
 
-Remember to save your key mapping using the 'save user key mapping' option.
-Also use the 'save preferences' to save the default user key mapping file
-that gets loaded when BeebEm starts up.
+(1) If you are in full screen mode then switch back to Windowed mode.
 
-The keypad +/- keys will change between the BeebEm fixed speeds.
+(2) Select menu item "Options -> Define User Key Mapping".  A graphic
+    showing the BBC keyboard layout will appear within the BeebEm interface.
 
-The keypad / and * keys will save and load a quickstate file.
+(3) Use your mouse pointer to click once on the BBC key that you are
+    attempting to map to your PC keyboard.
+      e.g. Click BBC key 8(
+
+(4) Decide which PC keys you want to map to the unshifted BBC key press and
+    which PC key you want to map to the shifted BBC key press.  It could be
+    the same PC key for both or it could be different keys.
+      e.g. For unshifted BBC key 8( press you would select PC key 8*
+           For shifted BBC key 8( press you would select PC key 9(
+
+(5) Now press the PC key you selected for the unshifted BBC key press.
+      e.g. Press PC key 8*
+
+(6) If the PC key you selected for the BBC shifted key press requires the PC
+    to be shifted then check the 'shift' box in the key dialog.  Now press
+    the PC key you selected for the shifted BBC key press (but do not press
+    shift).
+      e.g. Check the 'shift' box and press PC key 9(
+
+(7) Repeat from step 3 for other keys you want to map.
+
+(8) Save your mapping using menu item "Options -> Save User Key Mapping".
+    You can write over the default user key mapping file (DefaultUser.kmap)
+    or save a new file.
+
+(9) Select your mapping using menu item "Options -> User Defined Mapping".
+    You can also use the "Save Preferences" option to save the default user
+    key mapping file that gets loaded when BeebEm starts up.
 
 
 Using Disc Images
@@ -891,11 +917,17 @@ The following command line options can be passed to BeebEm:
   -Roms <roms configuration file name>
   -EcoStn <Econet station number>
   -EcoFF <Econet flag fill timeout, see the econet section>
+  -DisMenu
+     - Disables the drop down menus
+  -KbdCmd <keyboard command string>
+  -NoAutoBoot
+     - Disable auto-boot when disk image specified
   <disk image file name>
+  <tape file name>
   <state file name>
 
-Note: Command line options -Model and -Tube are no longer support.  Use
-      the -Prefs option with different preferences files instead.
+Note: Command line options -Model and -Tube are no longer supported.
+      Use the -Prefs option with different preferences files instead.
 
 e.g. Run Zalaga with its own preferences:
    BeebEm -Prefs ZalagaPrefs.cfg Zalaga.ssd
@@ -908,6 +940,9 @@ e.g. Run BeebEm with an alternative set of data files:
 
 e.g. To run BeebEm from a USB drive and access the local USB drive data:
    BeebEm -Data -
+
+e.g. To load and run the test tape image:
+   BeebEm -KbdCmd "OSCLI\s2\STAPE\s2\S\nPAGE=3584\nCH.\s22\S\n" test.uef
 
 These command lines can be put into Windows shortcuts or Windows scripts.
 See the BeebEmLocal.vbs and BeebEmTorch.vbs scripts for examples.
@@ -922,13 +957,37 @@ The preferences and ROMs configuration file names are relative to the data
 directory.
 
 If a disk image or a state file name is passed to BeebEm on the command line
-it will be run automatically.  The name can include the full path or it can
-just be the name of a file in the 'DiscIms' or 'BeebState' directory.
+it will be run automatically (but see -NoAutoBoot option).  The name can
+include the full path or it can just be the name of a file in the 'DiscIms'
+or 'BeebState' directory.
+
+If a tape image name is passed to BeebEm on the command line it will be
+loaded.  The name can include the full path or it can just be the name of a
+file in the 'Tapes' directory.  To run the tape image use the -KbdCmd option.
+
+The -KbdCmd option allows a string of key presses to be passed to BeebEm.
+The string can include the following key sequences:
+
+  \n           - press and release of enter/return
+  \s           - press shift
+  \S           - release shift
+  \c           - press control
+  \C           - release control
+  \\           - press and release of \ key
+  0-9          - press and release of a number key
+  A-Z          - press and release of a letter key
+  '-=[];'#,./  - press and release of a symbol key
+  \dNNNN       - set inter-keypress delay to NNNN milliseconds.
+                 Note that very low delays can result in loss of presses.
+
+So, for example, run a tape image using commands such as:
+   BeebEm -KbdCmd "OSCLI\s2\STAPE\s2\S\nPAGE=3584\nCH.\s22\S\n" test.uef
+   BeebEm -KbdCmd "OSCLI\s2\STAPE\s2\S\nOSCLI\s2\SRUN\s2\S\n" game.uef
 
 If you create a shortcut to BeebEm.exe on your desktop and edit the
 properties (right click the icon) you can add command line options and a
-disc or state file name to the target box.  Running the shortcut will then
-run the file.
+disc, tape or state file name to the target box.  Running the shortcut will
+then run the file.
 
 You can also associate files with .ssd, .dsd or .uef extensions with BeebEm
 using Windows Explorer.  Double clicking on one of these files will
@@ -978,6 +1037,10 @@ w file [count]       - Writes the last [count] lines of the debug window
 c start byte [byte] ... - Change memory.  Writes bytes starting at a
                           particular address.
                          e.g. c 7c00 68 65 6c 6c 6f
+g[p] addr            - Goto address ('gp' for parasite)
+fr file addr         - File read into host RAM
+fw file addr count   - File write from host RAM
+                         e.g. fw screendump 3000 5000
 
 NOTE: All values are specified in hex!
 

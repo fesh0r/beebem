@@ -1159,7 +1159,10 @@ void Exec6502Instruction(void) {
     for(loop=0;loop<loopc;loop++) {
         /* Output debug info */
         if (DebugEnabled && !DebugDisassembler(ProgramCounter,Accumulator,XReg,YReg,PSR,StackReg,true))
+        {
+            Sleep(10);  // Ease up on CPU when halted
             continue;
+        }
 
         if (trace == 1)
         {
@@ -2301,9 +2304,8 @@ void PollHardware(unsigned int nCycles)
     if (TotalCycles > CycleCountWrap)
     {
         TotalCycles -= CycleCountWrap;
-        //SoundCycles -= CycleCountWrap;
         AdjustTrigger(AtoDTrigger);
-        if (!DirectSoundEnabled) AdjustTrigger(SoundTrigger);
+        AdjustTrigger(SoundTrigger);
         AdjustTrigger(Disc8271Trigger);
         AdjustTrigger(AMXTrigger);
         AdjustTrigger(PrinterTrigger);
@@ -2369,9 +2371,6 @@ void Load6502UEF(FILE *SUEF) {
     NMIStatus=fgetc(SUEF);
     NMILock=fgetc(SUEF);
     //AtoDTrigger=Disc8271Trigger=AMXTrigger=PrinterTrigger=VideoTriggerCount=TotalCycles+100;
-    //if (UseHostClock) SoundTrigger=TotalCycles+100;
-    // Make sure emulator doesn't lock up waiting for triggers.
-
 }
 
 /*-------------------------------------------------------------------------*/

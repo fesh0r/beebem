@@ -182,6 +182,8 @@ void BeebWin::LoadPreferences()
     LEDs.ShowDisc=(LED_SHOW_DISC != 0);
     LEDs.ShowKB=LED_SHOW_KB;
 
+    PrefsGetBinaryValue("ShowBottomCursorLine",&ShowCursorLine,1);
+
     if (PrefsGetDWORDValue("MotionBlur",dword))
         m_MotionBlur = dword;
     else
@@ -514,6 +516,7 @@ void BeebWin::SavePreferences(bool saveAll)
         PrefsSetBinaryValue("HideMenuEnabled",&HideMenuEnabled,1);
         LEDByte=(DiscLedColour<<2)|((LEDs.ShowDisc?1:0)<<1)|(LEDs.ShowKB?1:0);
         PrefsSetBinaryValue("LED Information",&LEDByte,1);
+        PrefsSetBinaryValue("ShowBottomCursorLine",&ShowCursorLine,1);
         flag = m_MotionBlur;
         PrefsSetDWORDValue( "MotionBlur", m_MotionBlur);
         PrefsSetBinaryValue("MotionBlurIntensities",m_BlurIntensities,8);
