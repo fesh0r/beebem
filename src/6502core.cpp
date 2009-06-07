@@ -45,8 +45,8 @@
 #include "tube.h"
 #include "debug.h"
 #include "uefstate.h"
-#include "z80mem.h"
-#include "z80.h"
+//#include "z80mem.h"
+//#include "z80.h"
 #include "econet.h"
 #include "scsi.h"
 #include "debug.h"
@@ -88,15 +88,6 @@ unsigned char NMIStatus=0; /* bit set (nums in NMI_Nums) if NMI being caused */
 unsigned int NMILock=0; /* Well I think NMI's are maskable - to stop repeated NMI's - the lock is released when an RTI is done */
 typedef int int16;
 INLINE static void SBCInstrHandler(int16 operand);
-enum PSRFlags {
-  FlagC=1,
-  FlagZ=2,
-  FlagI=4,
-  FlagD=8,
-  FlagB=16,
-  FlagV=64,
-  FlagN=128
-};
 
 /* Note how GETCFLAG is special since being bit 0 we don't need to test it to get a clean 0/1 */
 #define GETCFLAG ((PSR & FlagC))
@@ -1158,7 +1149,7 @@ void Exec6502Instruction(void) {
     loopc=(DebugEnabled ? 1 : 1024); // Makes debug window more responsive
     for(loop=0;loop<loopc;loop++) {
         /* Output debug info */
-        if (DebugEnabled && !DebugDisassembler(ProgramCounter,Accumulator,XReg,YReg,PSR,StackReg,true))
+        if (DebugEnabled && !DebugDisassembler(ProgramCounter,PrePC,Accumulator,XReg,YReg,PSR,StackReg,true))
         {
             Sleep(10);  // Ease up on CPU when halted
             continue;
@@ -1169,7 +1160,7 @@ void Exec6502Instruction(void) {
             Dis6502();
         }
 
-        z80_execute();
+        //z80_execute();
 
         if (Enable_Arm)
         {
@@ -2313,6 +2304,7 @@ void PollHardware(unsigned int nCycles)
         AdjustTrigger(TapeTrigger);
         AdjustTrigger(EconetTrigger);
         AdjustTrigger(EconetFlagFillTimeoutTrigger);
+        AdjustTrigger(IP232RxTrigger);
         if (EnableTube)
             WrapTubeCycles();
     }

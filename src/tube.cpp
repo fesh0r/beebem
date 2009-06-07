@@ -33,8 +33,8 @@
 #include "tube.h"
 #include "debug.h"
 #include "uefstate.h"
-#include "z80mem.h"
-#include "z80.h"
+//#include "z80mem.h"
+//#include "z80.h"
 #include "Arm.h"
 
 #ifdef WIN32
@@ -51,12 +51,14 @@
 static int CurrentInstruction;
 unsigned char TubeRam[65536];
 extern int DumpAfterEach;
-unsigned char TubeEnabled,Tube186Enabled,AcornZ80,EnableTube;
+unsigned char TubeEnabled,Tube186Enabled,EnableTube;
+//unsigned char AcornZ80;
 unsigned char TubeMachineType=3;
 
 CycleCountT TotalTubeCycles=0;
 
 int TubeProgramCounter;
+static int PreTPC; // Previous Tube Program Counter;
 static int Accumulator,XReg,YReg;
 static unsigned char StackReg,PSR;
 static unsigned char IRQCycles;
@@ -67,15 +69,7 @@ static unsigned int NMILock=0; /* Well I think NMI's are maskable - to stop repe
 
 typedef int int16;
 
-enum PSRFlags {
-  FlagC=1,
-  FlagZ=2,
-  FlagI=4,
-  FlagD=8,
-  FlagB=16,
-  FlagV=64,
-  FlagN=128
-};
+
 
 /* Note how GETCFLAG is special since being bit 0 we don't need to test it to get a clean 0/1 */
 #define GETCFLAG ((PSR & FlagC))
@@ -201,6 +195,7 @@ void UpdateHostR4Interrupt(void) {
 }
 
 
+#if 0
 /*-------------------------------------------------------------------*/
 // Torch tube memory/io handling functions
 
@@ -361,6 +356,7 @@ void WriteTorchTubeFromParasiteSide(unsigned char IOAddr,unsigned char IOData)
         break;
     }
 }
+#endif
 
 /*-------------------------------------------------------------------*/
 // Tube memory/io handling functions
@@ -368,7 +364,7 @@ void WriteTorchTubeFromParasiteSide(unsigned char IOAddr,unsigned char IOData)
 unsigned char ReadTubeFromHostSide(unsigned char IOAddr) {
     unsigned char TmpData,TmpCntr;
 
-    if (! (EnableTube || Tube186Enabled || AcornZ80 || ArmTube) )
+    if (! (EnableTube || Tube186Enabled || /*AcornZ80 ||*/ ArmTube) )
         return(MachineType==3 ? 0xff : 0xfe); // return ff for master else return fe
 
     switch (IOAddr) {
@@ -434,7 +430,7 @@ unsigned char ReadTubeFromHostSide(unsigned char IOAddr) {
 }
 
 void WriteTubeFromHostSide(unsigned char IOAddr,unsigned char IOData) {
-    if (! (EnableTube || Tube186Enabled || AcornZ80 || ArmTube) )
+    if (! (EnableTube || Tube186Enabled || /*AcornZ80 ||*/ ArmTube) )
         return;
 
     if (DebugEnabled) {
@@ -503,8 +499,8 @@ void WriteTubeFromHostSide(unsigned char IOAddr,unsigned char IOData) {
 unsigned char ReadTubeFromParasiteSide(unsigned char IOAddr) {
     unsigned char TmpData;
 
-    if (TorchTube)
-        return ReadTorchTubeFromHostSide(IOAddr);
+    //if (TorchTube)
+    //  return ReadTorchTubeFromHostSide(IOAddr);
 
     switch (IOAddr) {
     case 0:
@@ -571,11 +567,11 @@ unsigned char ReadTubeFromParasiteSide(unsigned char IOAddr) {
 
 void WriteTubeFromParasiteSide(unsigned char IOAddr,unsigned char IOData)
 {
-    if (TorchTube)
-    {
-        WriteTorchTubeFromParasiteSide(IOAddr, IOData);
-        return;
-    }
+    //if (TorchTube)
+    //{
+    //  WriteTorchTubeFromParasiteSide(IOAddr, IOData);
+    //  return;
+    //}
 
     if (DebugEnabled) {
         char info[200];
@@ -1464,12 +1460,13 @@ void Exec65C02Instruction(void) {
 
   // Output debug info
   if (DebugEnabled)
-    DebugDisassembler(TubeProgramCounter,Accumulator,XReg,YReg,PSR,StackReg,false);
+    DebugDisassembler(TubeProgramCounter,PreTPC,Accumulator,XReg,YReg,PSR,StackReg,false);
 
   // For the Master, check Shadow Ram Presence
   // Note, this has to be done BEFORE reading an instruction due to Bit E and the PC
   /* Read an instruction and post inc program couter */
   OldPC=TubeProgramCounter;
+  PreTPC=TubeProgramCounter;
   CurrentInstruction=TubeRam[TubeProgramCounter++];
   // cout << "Fetch at " << hex << (TubeProgramCounter-1) << " giving 0x" << CurrentInstruction << dec << "\n";
   TubeCycles=TubeCyclesTable[CurrentInstruction];
@@ -2486,26 +2483,22 @@ void SyncTubeProcessor(void) {
 /*-------------------------------------------------------------------------*/
 void DebugTubeState(void)
 {
-    char info[200];
-
     DebugDisplayInfo("");
 
-    sprintf(info, "HostTube: R1=%02X R2=%02X R3=%02X R4=%02X R1n=%02X R3n=%02X",
+    DebugDisplayInfoF("HostTube: R1=%02X R2=%02X R3=%02X R4=%02X R1n=%02X R3n=%02X",
         (int)R1HStatus | R1Status,
         (int)R2HStatus,
         (int)R3HStatus,
         (int)R4HStatus,
         (int)R1PHPtr,
         (int)R3PHPtr);
-    DebugDisplayInfo(info);
 
-    sprintf(info, "ParaTube: R1=%02X R2=%02X R3=%02X R4=%02X R3n=%02X",
+    DebugDisplayInfoF("ParaTube: R1=%02X R2=%02X R3=%02X R4=%02X R3n=%02X",
         (int)R1PStatus | R1Status,
         (int)R2PStatus,
         (int)R3PStatus,
         (int)R4PStatus,
         (int)R3HPPtr);
-    DebugDisplayInfo(info);
 }
 
 /*-------------------------------------------------------------------------*/

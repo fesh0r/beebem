@@ -28,8 +28,8 @@
 #include "debug.h"
 #include "scsi.h"
 #include "sasi.h"
-#include "z80mem.h"
-#include "z80.h"
+//#include "z80mem.h"
+//#include "z80.h"
 #include "userkybd.h"
 #include "speech.h"
 #include "teletext.h"
@@ -88,16 +88,13 @@ void BeebWin::LoadPreferences()
     char keyData[256];
     unsigned char flag;
     DWORD dword;
-    char prefsFile[_MAX_PATH];
 
-    strcpy(prefsFile, m_UserDataPath);
-    strcat(prefsFile, m_PrefsFile);
-    fd = fopen(prefsFile, "r");
+    fd = fopen(m_PrefsFile, "r");
     if (fd == NULL)
     {
         // No prefs file, will use defaults
         char errstr[500];
-        sprintf(errstr, "Cannot open preferences file:\n  %s\n\nUsing default preferences", prefsFile);
+        sprintf(errstr, "Cannot open preferences file:\n  %s\n\nUsing default preferences", m_PrefsFile);
         MessageBox(m_hWnd, errstr, WindowTitle, MB_OK|MB_ICONERROR);
     }
     else if (fgets(buf, MAX_PREFS_LINE_LEN-1, fd) != NULL)
@@ -145,6 +142,11 @@ void BeebWin::LoadPreferences()
         m_DXSmoothing = flag;
     else
         m_DXSmoothing = true;
+
+    if (PrefsGetBinaryValue("DXSmoothMode7Only",&flag,1))
+        m_DXSmoothMode7Only = flag;
+    else
+        m_DXSmoothMode7Only = false;
 
     if (PrefsGetDWORDValue("DDFullScreenMode",dword))
         m_DDFullScreenMode = dword;
@@ -232,6 +234,8 @@ void BeebWin::LoadPreferences()
         RelaySoundEnabled=0;
     if (!PrefsGetBinaryValue("TapeSoundEnabled",&TapeSoundEnabled,1))
         TapeSoundEnabled=0;
+    if (!PrefsGetBinaryValue("DiscDriveSoundEnabled",&DiscDriveSoundEnabled,1))
+        DiscDriveSoundEnabled=1;
     if (!PrefsGetBinaryValue("UsePrimaryBuffer",&UsePrimaryBuffer,1))
         UsePrimaryBuffer=0;
     if (!PrefsGetBinaryValue("Part Samples",&PartSamples,1))
@@ -357,6 +361,27 @@ void BeebWin::LoadPreferences()
         SerialPortEnabled=0;
     if (!PrefsGetBinaryValue("TouchScreenEnabled",&TouchScreenEnabled,1))
         TouchScreenEnabled=0;
+//  if (!PrefsGetBinaryValue("EthernetPortEnabled",&EthernetPortEnabled,1))
+//      EthernetPortEnabled=false;
+    if (!PrefsGetBinaryValue("IP232localhost",&IP232localhost,1))
+        IP232localhost=0;
+    if (!PrefsGetBinaryValue("IP232custom",&IP232custom,1))
+        IP232custom=0;
+
+    EthernetPortEnabled = (IP232localhost || IP232custom);
+
+    if (!PrefsGetBinaryValue("IP232mode",&IP232mode,1))
+        IP232mode=0;
+    if (PrefsGetDWORDValue("IP232customport",dword))
+        IP232customport = dword;
+    else
+        IP232customport = 25232;
+    m_customport = IP232customport;
+    if (PrefsGetStringValue("IP232customip",m_customip))
+        strcpy(IP232customip, m_customip);
+    else
+        IP232customip[0] = 0;
+
     if (!PrefsGetBinaryValue("SerialPort",&SerialPort,1))
         SerialPort=2;
 
@@ -371,11 +396,11 @@ void BeebWin::LoadPreferences()
     if (!PrefsGetBinaryValue("ArmTube",&ArmTube,1))
         ArmTube=0;
 
-    if (!PrefsGetBinaryValue("TorchTube",&TorchTube,1))
-        TorchTube=0;
+    //if (!PrefsGetBinaryValue("TorchTube",&TorchTube,1))
+    //  TorchTube=0;
 
-    if (!PrefsGetBinaryValue("AcornZ80",&AcornZ80,1))
-        AcornZ80=0;
+    //if (!PrefsGetBinaryValue("AcornZ80",&AcornZ80,1))
+    //  AcornZ80=0;
 
     if (!PrefsGetBinaryValue("TubeEnabled",&TubeEnabled,1))
         TubeEnabled=0;
@@ -479,7 +504,7 @@ void BeebWin::LoadPreferences()
     }
 
     // Update prefs version
-    PrefsSetStringValue("PrefsVersion", "1.2");
+    PrefsSetStringValue("PrefsVersion", "1.4");
 
     // Windows key enable/disable still comes from registry
     int binsize = 24;
@@ -497,6 +522,7 @@ void BeebWin::SavePreferences(bool saveAll)
     char CfgName[256];
     unsigned char flag;
     char keyData[256];
+    DWORD dword;
 
     if (saveAll)
     {
@@ -505,6 +531,8 @@ void BeebWin::SavePreferences(bool saveAll)
         PrefsSetDWORDValue("DisplayRenderer",m_DisplayRenderer);
         flag = m_DXSmoothing;
         PrefsSetBinaryValue("DXSmoothing",&flag,1);
+        flag = m_DXSmoothMode7Only;
+        PrefsSetBinaryValue("DXSmoothMode7Only",&flag,1);
         PrefsSetDWORDValue("DDFullScreenMode",m_DDFullScreenMode);
         PrefsSetDWORDValue(CFG_VIEW_WIN_SIZE,m_MenuIdWinSize);
         flag = m_isFullScreen;
@@ -532,6 +560,7 @@ void BeebWin::SavePreferences(bool saveAll)
         PrefsSetDWORDValue( CFG_SOUND_VOLUME, m_MenuIdVolume);
         PrefsSetBinaryValue("RelaySoundEnabled",&RelaySoundEnabled,1);
         PrefsSetBinaryValue("TapeSoundEnabled",&TapeSoundEnabled,1);
+        PrefsSetBinaryValue("DiscDriveSoundEnabled",&DiscDriveSoundEnabled,1);
         PrefsSetBinaryValue("UsePrimaryBuffer",&UsePrimaryBuffer,1);
         PrefsSetBinaryValue("Part Samples",&PartSamples,1);
         PrefsSetBinaryValue("ExponentialVolume",&SoundExponentialVolume,1);
@@ -575,6 +604,15 @@ void BeebWin::SavePreferences(bool saveAll)
         PrefsSetBinaryValue("UnlockTape",&flag,1);
         PrefsSetBinaryValue("SerialPortEnabled",&SerialPortEnabled,1);
         PrefsSetBinaryValue("TouchScreenEnabled",&TouchScreenEnabled,1);
+//      PrefsSetBinaryValue("EthernetPortEnabled",&EthernetPortEnabled,1);
+        PrefsSetBinaryValue("IP232localhost",&IP232localhost,1);
+        PrefsSetBinaryValue("IP232custom",&IP232custom,1);
+        dword = IP232customport;
+        PrefsSetBinaryValue("IP232mode",&IP232mode,1);
+        PrefsSetDWORDValue("IP232customport", dword);
+        PrefsSetStringValue("IP232customip", m_customip);
+
+
         PrefsSetBinaryValue("SerialPort",&SerialPort,1);
 
         PrefsSetBinaryValue("EconetEnabled",&EconetEnabled,1); //Rob
@@ -582,8 +620,8 @@ void BeebWin::SavePreferences(bool saveAll)
         PrefsSetBinaryValue("SpeechEnabled",&flag,1);
 
         PrefsSetBinaryValue("ArmTube",&ArmTube,1);
-        PrefsSetBinaryValue("TorchTube",&TorchTube,1);
-        PrefsSetBinaryValue("AcornZ80",&AcornZ80,1);
+        //PrefsSetBinaryValue("TorchTube",&TorchTube,1);
+        //PrefsSetBinaryValue("AcornZ80",&AcornZ80,1);
         PrefsSetBinaryValue("TubeEnabled",&TubeEnabled,1);
         PrefsSetBinaryValue("Tube186Enabled",&Tube186Enabled,1);
 
@@ -619,15 +657,12 @@ void BeebWin::SavePreferences(bool saveAll)
 
     // Write the file
     FILE *fd;
-    char prefsFile[_MAX_PATH];
 
-    strcpy(prefsFile, m_UserDataPath);
-    strcat(prefsFile, m_PrefsFile);
-    fd = fopen(prefsFile, "w");
+    fd = fopen(m_PrefsFile, "w");
     if (fd == NULL)
     {
         char errstr[500];
-        sprintf(errstr, "Failed to write preferences file:\n  %s", prefsFile);
+        sprintf(errstr, "Failed to write preferences file:\n  %s", m_PrefsFile);
         MessageBox(m_hWnd, errstr, WindowTitle, MB_OK|MB_ICONERROR);
     }
     else

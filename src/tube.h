@@ -28,7 +28,8 @@
 extern unsigned char R1Status;
 void ResetTube(void);
 
-extern unsigned char EnableTube,TubeEnabled,Tube186Enabled,AcornZ80;
+extern unsigned char EnableTube,TubeEnabled,Tube186Enabled;
+//extern unsigned char AcornZ80;
 extern int TorchTubeActive;
 extern int TubeProgramCounter;
 
@@ -71,6 +72,7 @@ void WriteTorchTubeFromHostSide(unsigned char IOAddr,unsigned char IOData);
 void WriteTorchTubeFromParasiteSide(unsigned char IOAddr,unsigned char IOData);
 
 unsigned char TubeReadMem(unsigned int IOAddr);
+void TubeWriteMem(unsigned int IOAddr,unsigned char IOData);
 void DebugTubeState(void);
 void SaveTubeUEF(FILE *SUEF);
 void Save65C02UEF(FILE *SUEF);
