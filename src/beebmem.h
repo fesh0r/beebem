@@ -1,24 +1,29 @@
-/****************************************************************************/
-/*              Beebem - (c) David Alan Gilbert 1994                        */
-/*              ------------------------------------                        */
-/* This program may be distributed freely within the following restrictions:*/
-/*                                                                          */
-/* 1) You may not charge for this program or for any part of it.            */
-/* 2) This copyright message must be distributed with all copies.           */
-/* 3) This program must be distributed complete with source code.  Binary   */
-/*    only distribution is not permitted.                                   */
-/* 4) The author offers no warrenties, or guarentees etc. - you use it at   */
-/*    your own risk.  If it messes something up or destroys your computer   */
-/*    thats YOUR problem.                                                   */
-/* 5) You may use small sections of code from this program in your own      */
-/*    applications - but you must acknowledge its use.  If you plan to use  */
-/*    large sections then please ask the author.                            */
-/*                                                                          */
-/* If you do not agree with any of the above then please do not use this    */
-/* program.                                                                 */
-/* Please report any problems to the author at beebem@treblig.org           */
-/****************************************************************************/
+/****************************************************************
+BeebEm - BBC Micro and Master 128 Emulator
+Copyright (C) 1994  David Alan Gilbert
+Copyright (C) 1997  Mike Wyatt
+Copyright (C) 2001  Richard Gellman
+Copyright (C) 2004  Ken Lowe
+Copyright (C) 2004  Rob O'Donnell
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public
+License along with this program; if not, write to the Free
+Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+Boston, MA  02110-1301, USA.
+****************************************************************/
+
 /* Beebemulator - memory subsystem - David Alan Gilbert 16/10/94 */
+
 #ifndef BEEBMEM_HEADER
 #define BEEBMEM_HEADER
 
@@ -36,6 +41,8 @@ extern unsigned char PrivateRAM[4096]; // 4K Private RAM (VDU Use mainly)
 extern unsigned char CMOSRAM[64]; // 50 Bytes CMOS RAM
 extern unsigned char ShadowRAM[32768]; // 20K Shadow RAM
 extern unsigned char ACCCON; // ACCess CONtrol register
+extern int MemSel, PrvEn, ShEn, Prvs1, Prvs4, Prvs8, HidAdd;
+
 struct CMOSType {
     unsigned char Enabled;
     unsigned char ChipSelect;
@@ -44,6 +51,32 @@ struct CMOSType {
     unsigned char DataStrobe;
     unsigned char Op;
 };
+
+typedef enum RomFlags
+{
+    RomService=128,
+    RomLanguage=64,
+    RomRelocate=32,
+    RomSoftKey=16, // Electron only
+    RomFlag3=8,
+    RomFlag2=4,
+    RomFlag1=2,
+    RomFlag0=1,
+} RomFlags;
+
+typedef struct RomInfo {
+    int Slot;
+    int LanguageAddr;
+    int ServiceAddr;
+    int WorkspaceAddr;
+    RomFlags Flags;
+    int Version;
+    char Title[256];
+    char VersionStr[256];
+    char Copyright[256];
+    int RelocationAddr;
+} RomInfo;
+
 extern struct CMOSType CMOS;
 extern unsigned char Sh_Display,Sh_CPUX,Sh_CPUE,PRAM,FRAM;
 extern char RomPath[512];
@@ -55,7 +88,7 @@ extern char RomFile[512];
 #define BEEBREADMEM_FASTINC(a) ((a<0xfc00)?WholeRam[a++]:BeebReadMem(a++))
 
 int BeebReadMem(int Address);
-void BeebWriteMem(int Address, int Value);
+void BeebWriteMem(int Address, unsigned char Value);
 #define BEEBWRITEMEM_FAST(Address, Value) if (Address<0x8000) WholeRam[Address]=Value; else BeebWriteMem(Address,Value);
 #define BEEBWRITEMEM_DIRECT(Address, Value) WholeRam[Address]=Value;
 char *BeebMemPtrWithWrap(int a, int n);
@@ -63,6 +96,8 @@ char *BeebMemPtrWithWrapMo7(int a, int n);
 void BeebReadRoms(void);
 void BeebMemInit(unsigned char LoadRoms,unsigned char SkipIntegraBConfig);
 
+/* used by debugger */
+bool ReadRomInfo(int bank, RomInfo* info);
 /* Used to show the Rom titles from the options menu */
 char *ReadRomTitle( int bank, char *Title, int BufSize );
 
@@ -78,4 +113,5 @@ void LoadPrivMemUEF(FILE *SUEF);
 void LoadFileMemUEF(FILE *SUEF);
 void LoadSWRMMemUEF(FILE *SUEF);
 void LoadIntegraBHiddenMemUEF(FILE *SUEF);
+void DebugMemoryState();
 #endif

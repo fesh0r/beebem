@@ -1,23 +1,26 @@
-/****************************************************************************/
-/*              Beebem - (c) David Alan Gilbert 1994                        */
-/*              ------------------------------------                        */
-/* This program may be distributed freely within the following restrictions:*/
-/*                                                                          */
-/* 1) You may not charge for this program or for any part of it.            */
-/* 2) This copyright message must be distributed with all copies.           */
-/* 3) This program must be distributed complete with source code.  Binary   */
-/*    only distribution is not permitted.                                   */
-/* 4) The author offers no warrenties, or guarentees etc. - you use it at   */
-/*    your own risk.  If it messes something up or destroys your computer   */
-/*    thats YOUR problem.                                                   */
-/* 5) You may use small sections of code from this program in your own      */
-/*    applications - but you must acknowledge its use.  If you plan to use  */
-/*    large sections then please ask the author.                            */
-/*                                                                          */
-/* If you do not agree with any of the above then please do not use this    */
-/* program.                                                                 */
-/* Please report any problems to the author at beebem@treblig.org           */
-/****************************************************************************/
+/****************************************************************
+BeebEm - BBC Micro and Master 128 Emulator
+Copyright (C) 1994  David Alan Gilbert
+Copyright (C) 1997  Mike Wyatt
+Copyright (C) 2001  Richard Gellman
+Copyright (C) 2004  Ken Lowe
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public
+License along with this program; if not, write to the Free
+Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+Boston, MA  02110-1301, USA.
+****************************************************************/
+
 /* System VIA support file for the beeb emulator- includes things like the
 keyboard emulation - David Alan Gilbert 30/10/94 */
 /* CMOS Ram finalised 06/01/2001 - Richard Gellman */
@@ -37,7 +40,9 @@ keyboard emulation - David Alan Gilbert 30/10/94 */
 #include "main.h"
 #include "viastate.h"
 #include "debug.h"
+#ifdef SPEECH_ENABLED
 #include "speech.h"
+#endif
 
 #ifdef WIN32
 #include <windows.h>
@@ -47,7 +52,8 @@ using namespace std;
 
 /* Clock stuff for Master 128 RTC */
 time_t SysTime;
-struct tm * CurTime;
+time_t RTCTimeOffset=0;
+unsigned char RTCY2KAdjust=1;
 
 // Shift register stuff
 unsigned char SRMode;
@@ -81,7 +87,7 @@ static unsigned char SlowDataBusWriteValue=0;
 static unsigned int KBDRow=0;
 static unsigned int KBDCol=0;
 
-static char SysViaKbdState[10][8]; /* Col,row */
+static char SysViaKbdState[16][8]; /* Col,row */
 static int KeysDown=0;
 
 /*--------------------------------------------------------------------------*/
@@ -117,7 +123,7 @@ void BeebKeyUp(int row,int col) {
 void BeebReleaseAllKeys() {
   KeysDown = 0;
     for(int row=0;row<8;row++)
-      for(int col=0;col<10;col++)
+      for(int col=0;col<16;col++)
         SysViaKbdState[col][row]=0;
 }; /* BeebKeyUp */
 
@@ -135,7 +141,7 @@ void DoKbdIntCheck() {
       /*cerr << "DoKbdIntCheck: Caused interrupt case 1\n"; */
       UpdateIFRTopBit();
     } else {
-      if (KBDCol<10) {
+      if (KBDCol<15) {
         int presrow;
         for(presrow=1;presrow<8;presrow++) {
           if (SysViaKbdState[KBDCol][presrow]) {
@@ -175,7 +181,7 @@ void BeebKeyDown(int row,int col) {
   any keypressed interrupt */
 static int KbdOP(void) {
   /* Check range validity */
-  if ((KBDCol>9) || (KBDRow>7)) return(0); /* Key not down if overrange - perhaps we should do something more? */
+  if ((KBDCol>14) || (KBDRow>7)) return(0); /* Key not down if overrange - perhaps we should do something more? */
 
   return(SysViaKbdState[KBDCol][KBDRow]);
 } /* KbdOP */
@@ -221,10 +227,12 @@ static void IC32Write(unsigned char Value) {
 #endif
   /* cerr << "IC32State now=" << hex << int(IC32State) << dec << "\n"; */
 
+#ifdef SPEECH_ENABLED
   if ( (bit == 2) && ( (Value & 8)  == 0) && (MachineType != 3) )       //  Write Command
   {
       tms5220_data_w(SlowDataBusWriteValue);
   }
+#endif
 
   DoKbdIntCheck(); /* Should really only if write enable on KBD changes */
 } /* IC32Write */
@@ -278,9 +286,11 @@ static int SlowDataBusRead(void) {
       if (KbdOP()) result|=128;
   }
 
+#ifdef SPEECH_ENABLED
   if ((!(IC32State & 2)) && (MachineType != 3) ) {
     result = tms5220_status_r();
   }
+#endif
 
   if ((!(IC32State & 4)) && (MachineType != 3) ) {
       result = 0xff;
@@ -435,12 +445,14 @@ int SysVIARead(int Address) {
       }
       else
       {
+#ifdef SPEECH_ENABLED
         if (SpeechDefault)
         {
           if (tms5220_int_r()) tmp |= 64;
           if (tms5220_ready_r() == 0) tmp |= 128;
         }
         else
+#endif
         {
           tmp |= 192; /* Speech system non existant */
         }
@@ -614,7 +626,7 @@ void SysVIAReset(void) {
 
   /* Make it no keys down and no dip switches set */
   for(row=0;row<8;row++)
-    for(col=0;col<10;col++)
+    for(col=0;col<16;col++)
       SysViaKbdState[col][row]=0;
     SRData=0;
     SRMode=0;
@@ -627,14 +639,86 @@ unsigned char BCD(unsigned char nonBCD) {
     // convert a decimal value to a BCD value
     return(((nonBCD/10)*16)+nonBCD%10);
 }
+unsigned char BCDToBin(unsigned char BCD) {
+    // convert a BCD value to decimal value
+    return((BCD>>4)*10+(BCD&15));
+}
+/*-------------------------------------------------------------------------*/
+time_t CMOSConvertClock(void) {
+    time_t tim;
+    struct tm Base;
+    Base.tm_sec = BCDToBin(CMOSRAM[0]);
+    Base.tm_min = BCDToBin(CMOSRAM[2]);
+    Base.tm_hour = BCDToBin(CMOSRAM[4]);
+    Base.tm_mday = BCDToBin(CMOSRAM[7]);
+    Base.tm_mon = BCDToBin(CMOSRAM[8])-1;
+    Base.tm_year = BCDToBin(CMOSRAM[9]);
+    Base.tm_wday = -1;
+    Base.tm_yday = -1;
+    Base.tm_isdst = -1;
+    tim = mktime(&Base);
+    return tim;
+}
+/*-------------------------------------------------------------------------*/
+void RTCInit(void) {
+    struct tm *CurTime;
+    time( &SysTime );
+    CurTime = localtime( &SysTime );
+    CMOSRAM[0] = BCD(CurTime->tm_sec);
+    CMOSRAM[2] = BCD(CurTime->tm_min);
+    CMOSRAM[4] = BCD(CurTime->tm_hour);
+    CMOSRAM[6] = BCD((CurTime->tm_wday)+1);
+    CMOSRAM[7] = BCD(CurTime->tm_mday);
+    CMOSRAM[8] = BCD((CurTime->tm_mon)+1);
+    CMOSRAM[9] = BCD((CurTime->tm_year)-(RTCY2KAdjust ? 20 : 0));
+    RTCTimeOffset = SysTime - CMOSConvertClock();
+}
+/*-------------------------------------------------------------------------*/
+void RTCUpdate(void) {
+    struct tm *CurTime;
+    time( &SysTime );
+    SysTime -= RTCTimeOffset;
+    CurTime = localtime( &SysTime );
+    CMOSRAM[0] = BCD(CurTime->tm_sec);
+    CMOSRAM[2] = BCD(CurTime->tm_min);
+    CMOSRAM[4] = BCD(CurTime->tm_hour);
+    CMOSRAM[6] = BCD((CurTime->tm_wday)+1);
+    CMOSRAM[7] = BCD(CurTime->tm_mday);
+    CMOSRAM[8] = BCD((CurTime->tm_mon)+1);
+    CMOSRAM[9] = BCD(CurTime->tm_year);
+}
 /*-------------------------------------------------------------------------*/
 void CMOSWrite(unsigned char CMOSAddr,unsigned char CMOSData) {
     // Many thanks to Tom Lees for supplying me with info on the 146818 registers
     // for these two functions.
-    // Clock registers 0-0x9h shall not be writable
-    // ignore all status registers, so this function shall just write to CMOS
-    // but we can leave it here for future developments
     if (CMOSAddr>0xd) {
+        CMOSRAM[CMOSAddr]=CMOSData;
+    }
+    else if (CMOSAddr==0xa) {
+        // Control register A
+        CMOSRAM[CMOSAddr]=CMOSData & 0x7f; // Top bit not writable
+    }
+    else if (CMOSAddr==0xb) {
+        // Control register B
+        // Bit-7 SET - 0=clock running, 1=clock update halted
+        if (CMOSData & 0x80) {
+            RTCUpdate();
+        }
+        else if ((CMOSRAM[CMOSAddr] & 0x80) && !(CMOSData & 0x80)) {
+            // New clock settings
+            time(&SysTime);
+            RTCTimeOffset = SysTime - CMOSConvertClock();
+        }
+        CMOSRAM[CMOSAddr]=CMOSData;
+    }
+    else if (CMOSAddr==0xc) {
+        // Control register C - read only
+    }
+    else if (CMOSAddr==0xd) {
+        // Control register D - read only
+    }
+    else {
+        // Clock registers
         CMOSRAM[CMOSAddr]=CMOSData;
     }
 }
@@ -644,20 +728,9 @@ unsigned char CMOSRead(unsigned char CMOSAddr) {
     // 0x0 to 0x9 - Clock
     // 0xa to 0xd - Regs
     // 0xe to 0x3f - RAM
-    if (CMOSAddr>0xd) return(CMOSRAM[CMOSAddr]);
-    if (CMOSAddr<0xa) {
-        time( &SysTime );
-        CurTime = localtime( &SysTime );
-        if (CMOSAddr==0x00) return(BCD(CurTime->tm_sec));
-        if (CMOSAddr==0x02) return(BCD(CurTime->tm_min));
-        if (CMOSAddr==0x04) return(BCD(CurTime->tm_hour));
-        if (CMOSAddr==0x06) return(BCD((CurTime->tm_wday)+1));
-        if (CMOSAddr==0x07) return(BCD(CurTime->tm_mday));
-        if (CMOSAddr==0x08) return(BCD((CurTime->tm_mon)+1));
-        if (CMOSAddr==0x09) return(BCD((CurTime->tm_year)-10));
-    }
-    if (CMOSAddr>0x9 && CMOSAddr<0xe) return(0);
-    return(0);
+    if (CMOSAddr<0xa)
+        RTCUpdate();
+    return(CMOSRAM[CMOSAddr]);
 }
 
 /*--------------------------------------------------------------------------*/

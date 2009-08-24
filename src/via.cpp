@@ -1,24 +1,24 @@
-/****************************************************************************/
-/*              Beebem - (c) David Alan Gilbert 1994                        */
-/*              ------------------------------------                        */
-/* This program may be distributed freely within the following restrictions:*/
-/*                                                                          */
-/* 1) You may not charge for this program or for any part of it.            */
-/* 2) This copyright message must be distributed with all copies.           */
-/* 3) This program must be distributed complete with source code.  Binary   */
-/*    only distribution is not permitted.                                   */
-/* 4) The author offers no warrenties, or guarentees etc. - you use it at   */
-/*    your own risk.  If it messes something up or destroys your computer   */
-/*    thats YOUR problem.                                                   */
-/* 5) You may use small sections of code from this program in your own      */
-/*    applications - but you must acknowledge its use.  If you plan to use  */
-/*    large sections then please ask the author.                            */
-/*                                                                          */
-/* If you do not agree with any of the above then please do not use this    */
-/* program.                                                                 */
-/* Please report any problems to the author at beebem@treblig.org           */
-/****************************************************************************/
-/* Support file for 6522 via - 30/10/94 - David Alan Gilbert */
+/****************************************************************
+BeebEm - BBC Micro and Master 128 Emulator
+Copyright (C) 1994  David Alan Gilbert
+Copyright (C) 1997  Mike Wyatt
+Copyright (C) 2004  Ken Lowe
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public
+License along with this program; if not, write to the Free
+Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+Boston, MA  02110-1301, USA.
+****************************************************************/
 
 #ifndef VIA_HEADER
 #define VIA_HEADER
@@ -73,29 +73,24 @@ void via_dumpstate(VIAState *ToDump) {
 
 void DebugViaState(const char *s, VIAState *v)
 {
-    char info[200];
-
     DebugDisplayInfo("");
 
-    sprintf(info, "%s: ora=%02X orb=%02X ira=%02X irb=%02X ddra=%02X ddrb=%02X", s,
+    DebugDisplayInfoF("%s: ora=%02X orb=%02X ira=%02X irb=%02X ddra=%02X ddrb=%02X", s,
         (int)v->ora, (int)v->orb,
         (int)v->ira, (int)v->irb,
         (int)v->ddra, (int)v->ddrb);
-    DebugDisplayInfo(info);
 
-    sprintf(info, "%s: acr=%02X pcr=%02X ifr=%02X ier=%02X", s,
+    DebugDisplayInfoF("%s: acr=%02X pcr=%02X ifr=%02X ier=%02X", s,
         (int)v->acr, (int)v->pcr,
         (int)v->ifr, (int)v->ier);
-    DebugDisplayInfo(info);
 
-    sprintf(info, "%s: t1=%04X%s t2=%04X%s t1l=%04X t2l=%04X t1s=%d t2s=%d", s,
+    DebugDisplayInfoF("%s: t1=%04X%s t2=%04X%s t1l=%04X t2l=%04X t1s=%d t2s=%d", s,
         (int)(v->timer1c < 0 ? ((v->timer1c - 1) / 2) & 0xffff : v->timer1c / 2),
         v->timer1c & 1 ? "+" : " ",
         (int)(v->timer2c < 0 ? ((v->timer2c - 1) / 2) & 0xffff : v->timer2c / 2),
         v->timer2c & 1 ? "+" : " ",
         (int)v->timer1l, (int)v->timer2l,
         (int)v->timer1hasshot, (int)v->timer2hasshot);
-    DebugDisplayInfo(info);
 }
 
 void SaveVIAUEF(FILE *SUEF) {

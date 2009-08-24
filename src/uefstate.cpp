@@ -1,8 +1,25 @@
-// UEF Game state code for BeebEm V1.38
-// Note - This version will be the last of the V1.3 series.
-// After that, BeebEm the V1.4 Series will commence.
+/****************************************************************
+BeebEm - BBC Micro and Master 128 Emulator
+Copyright (C) 2001  Richard Gellman
+Copyright (C) 2009  Mike Wyatt
 
-// (C) June 2001 Richard Gellman
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public
+License along with this program; if not, write to the Free
+Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+Boston, MA  02110-1301, USA.
+****************************************************************/
+
+// UEF Game state code.
 
 #include <stdio.h>
 #include "6502core.h"
@@ -53,8 +70,8 @@ void SaveUEFState(char *StateName) {
     {
         fprintf(UEFState,"UEF File!");
         fputc(0,UEFState); // UEF Header
-        fputc(10,UEFState); fputc(0,UEFState); // Version
-        SaveEmuUEF(UEFState);
+        fputc(11,UEFState); fputc(0,UEFState); // Version
+        mainWin->SaveEmuUEF(UEFState);
         Save6502UEF(UEFState);
         SaveMemUEF(UEFState);
         SaveVideoUEF(UEFState);
@@ -111,7 +128,7 @@ void LoadUEFState(char *StateName) {
             CPos=ftell(UEFState);
             sprintf(errmsg,"Block %04X - Length %d (%04X)",Block,Length,Length);
             //MessageBox(GETHWND,errmsg,"BeebEm",MB_ICONERROR|MB_OK);
-            if (Block==0x046A) LoadEmuUEF(UEFState,Version);
+            if (Block==0x046A) mainWin->LoadEmuUEF(UEFState,Version);
             if (Block==0x0460) Load6502UEF(UEFState);
             if (Block==0x0461) LoadRomRegsUEF(UEFState);
             if (Block==0x0462) LoadMainMemUEF(UEFState);

@@ -1,6 +1,5 @@
 /****************************************************************
 BeebEm - BBC Micro and Master 128 Emulator
-Copyright (C) 2001  Richard Gellman
 Copyright (C) 2009  Mike Wyatt
 
 This program is free software; you can redistribute it and/or
@@ -18,12 +17,8 @@ License along with this program; if not, write to the Free
 Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 Boston, MA  02110-1301, USA.
 ****************************************************************/
-#ifndef UEFSTATE_HEADER
-#define UEFSTATE_HEADER
-void fput32(unsigned int word32,FILE *fileptr);
-void fput16(unsigned int word16,FILE *fileptr);
-unsigned int fget32(FILE *fileptr);
-unsigned int fget16(FILE *fileptr);
-void SaveUEFState(char *StateName);
-void LoadUEFState(char *StateName);
-#endif
+
+// BeebEm version
+#define VERSION_MAJOR   4
+#define VERSION_MINOR   11
+#define VERSION_STRING  "4.11"

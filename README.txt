@@ -13,7 +13,13 @@ BeebEm is distributed with source code in the Src.zip file so you can
 compile and modify BeebEm yourself.
 
 The copyright for Beebem is held by David Alan Gilbert and the other authors
-and contributors, as described in COPYRIGHT.txt.
+and contributors (listed below).  BeebEm is distributed under the terms of
+the GNU General Public License, as described in COPYRIGHT.txt.
+
+If you have any problems, questions or suggestions for improvements please
+email me here:
+
+  beebem.support@googlemail.com
 
 
 Running BBC Micro Software
@@ -52,6 +58,18 @@ Q2. How do you open the menus in full screen mode?
 
 A2. Move the mouse cursor to the top left of the screen and press Alt+F to
     open the File menu.
+
+Q3. How do I set up different preferences for different games?
+
+A3. When a disk, tape or state file is run from the command line (or you
+    double click on one of these files) BeebEm will check for a
+    Preferences.cfg and Roms.cfg file in the same folder as the image file.
+    You can create separate folders for the games that required different
+    preferences, copy the Preferences.cfg and Roms.cfg files into these
+    folders and then setup the preferences as required in BeebEm and save
+    them.  BeebEm will also check for file specific Preference and Roms
+    files when running a disk image and loading a state file using the
+    menus.
 
 
 Configuring BeebEm
@@ -155,9 +173,19 @@ these are not:
    '@               :*
    End              Copy
 
-The keypad +/- keys will change between the BeebEm fixed speeds.
+There are some shortcut keys for various features:
 
-The keypad / and * keys will save and load a quickstate file.
+  keypad +      Increase emulation speed
+  ALT +         Increase emulation speed
+  keypad -      Decrease emulation speed
+  ALT -         Decrease emulation speed
+  keypad /      Quick save state
+  ALT 1         Quick save state
+  keypad *      Quick load state
+  ALT 2         Quick load state
+  ALT keypad 5  Capture screen to file (with NumLock on)
+  ALT 5         Capture screen to file
+  ALT ENTER     Toggle fullscreen mode
 
 With a logical mapping the key symbols are mapped directly so you get what
 you press.  Note that the logical mapping sometimes has to change the shift
@@ -350,9 +378,12 @@ Econet Support
 --------------
 
 BeebEm emulates an econet network.  This allows multiple instances of BeebEm
-to communicate with other.  Enable econet support from the Hardware menu in
-BeebEm.  Also switch off 'Freeze when inactive' so multiple instances of
-BeebEm can run at the same time.
+to communicate with other.  BeebEm also supports the AUN Econet protocols
+that enable BeebEm to communicate with other AUN compatible machines.
+
+Econet support is enabled from the Hardware menu in BeebEm.  Also switch off
+'Freeze when inactive' if you intend to run multiple instances of BeebEm so
+they can all run at the same time.
 
 Each machine attached to an econet has a station number (between 1 and 254)
 associated with it.  An econet may also have a file server attached to it
@@ -361,13 +392,21 @@ associated with it.  An econet may also have a file server attached to it
 BeebEm emulates an econet using IP datagrams.  Each station on the network
 needs a unique IP address and port number combination.  Each instance of
 BeebEm needs to know the address and port number of the other instances on
-the network, this information is configured in the 'Econet.cfg' file.
+the network, this information is configured in the 'Econet.cfg' and 'AUNMap'
+files.
 
-The default Econet.cfg file has been set up so that the first 5 instances of
-BeebEm run on a single PC will get allocated unique station and port
-numbers.  The first instance will be allocated a station number 254 (file
-server) and next 4 will be allocated station numbers 101 to 104.  See the
-notes in Econet.cfg for more details.
+The default Econet.cfg file has been set up to enable AUN mode.  Read the
+notes in the Econet.cfg and AUNMap files for more information on configuring
+AUN mode.
+
+If you just want to run a few instances of BeebEm on a single PC then the
+simplest way to is to edit the Econet.cfg file and disable AUN mode (set
+AUNMODE to 0) and uncomment the example network configuration for IP
+addresses 127.0.0.1 (near the end of Econet.cfg).  With this configured the
+first 5 instances of BeebEm run on a single PC will get allocated unique
+station and port numbers.  The first instance will be allocated a station
+number 254 (file server) and next 4 will be allocated station numbers 101 to
+104.  See the notes in Econet.cfg for more details.
 
 An econet file server enables a disk file system to be shared by all of the
 stations on the network.  Acorn produced various versions of file server
@@ -412,38 +451,11 @@ report "Line Jammed".  The waiting time is set by default to 100000 cycles
 50000'.
 
 
-Master 512 Co Processor Support
+Master 512 Co-Processor Support
 -------------------------------
-The software now supports the Master 512 Co-Processor board.
-
-The Master 512 board was an add-on card to the BBC computers which allowed you
-to run DOS Plus (based on CP/M but largely MS-DOS compatible) software.
-It was 80186 based, ran at 10 MHz came with 512K of RAM (or 1MB with third
-party upgrades) and connected to the BBC via the Tube interface.
-
-You start the Master 512 by selecting 80186 Second Processor off the hardware
-menu. This will boot off a 10MB hard disc image (ADFS Drive 0) which comes
-pre-installed with the original DOS Plus system and the GEM application software.
-The emulator will also recognise Drive A and B if a suitable DOS Plus formatted
-disc is loaded. The emulator should recognise various disc formats (look at
-the DISK program for more info) but I would only recommend using 640K ADFS .adl
-format and 800K DOS Plus .img format discs.
-
-GEM can be started by typing 'GEM' from the command prompt. GEM uses the AMX
-mouse support which much be enabled for the mouse to work. I would recommend you
-start GEM first then enable AMX Mouse support afterwards. Please note that mouse
-support works but due to the acceleration factors built into the GEM driver,
-mouse movement can be a bit erratic. I hope to improve this in future versions
-of the emulator.
-
-The Master 512 should run most MS-DOS 2.1 compatible software but no guarantees
-are given for what will and what won't work.
-
-I will start a library of known good disc images at :
-
-http://www.g7jjf.com/512_disc_images.htm
-
-Please feel free to send me any more you know work with the Master 512.
+Due to code licensing issues the Master 512 Co-Processor emulation is not
+included in this version of BeebEm.  The Master 512 Co-Processor emulation
+is included in BeebEm version 4.03, available on the BeebEm website.
 
 
 Acorn Z80 Co Processor Support
@@ -541,42 +553,73 @@ emulation on the hardware menu to get Teletext to work.
 
 Speech Generator
 ----------------
-The BBC B and B+ had the facility for installing a TMS5220 Speech Generator
-chip and associated TMS6100 PHROM containing the digitised voice of the BBC
-newsreader Kenneth Kendall. With these two chips installed, you could easily
-make the computer speak using the BASIC SOUND command. BeebEm now supports
-the TMS5220 and upto 16 different PHROM's. A new configuration file has been
-created to specify which PHROM's are available. The configuration file is
-phroms.cfg and contains a list of 16 PHROM filenames or EMPTY if a PHROM
-is not available. Two PHROM's are currently included with the emulator and
-are stored in the Phroms directory. They are PHROMA which was the original
-Kenneth Kendall voice and PHROMUS which is an American voice speaking a
-different dictionary.
+Due to code licensing issues the TMS5220 Speech Generator emulation is not
+included in this version of BeebEm.  The Speech Generator emulation is
+included in BeebEm version 4.03, available on the BeebEm website.
 
-To say a word, you use the SOUND command, eg :
 
-SOUND -1, 179, 0, 0 would speak COMPUTER using PHROMA.
+Serial Port IP Options
+----------------------
 
-The -1 specifies the PHROM number to use, from -1 to -16 which corresponds
-to each entry in the phroms.cfg file.
+The serial port emulation in BeebEm has options to connect via TCP/IP to a
+local or remote IP address.  You can use ROMs such as CommSoft or CommStar
+to connect to a Viewdata BBS, MUD server or any other type of server.
 
-A list of words available in PHROMSUS is included in the Phroms directory for
-reference. A list for PHROMA can be found in Appendix A and B of the manual
-detailed below.
+The serial IP features are selected via the IP destinations on the RS423
+Comms menu.  The "IP: localhost:25232" option is designed for use with the
+"tcpser" package, which emulates a modem.  Download a prebuilt Windows
+binary (and RC11 sources) here:
 
-The Torch Z80 Co Processor also supports the speech system. Try the SNAKE game
-off the system utilities disc. There is also BACKCHAT.
+  http://www.mkw.me.uk/beebem/tcpser.zip
+  (tcpser home is: http://www.jbrain.com/pub/linux/serial)
 
-Please remember that the Master 128 doesn't support speech so you need to be
-in Model B/B+ mode for speech to work.
+Run the "go.bat" file to fire up an instance suitable for the localhost
+setting to talk to.  This will also allow incoming connections, as that does
+all the answering business and passes the caller onto the Beeb via the
+pre-existing connection.  This handles the handshake lines if you enable
+ip232 mode, so dropping RTS will drop an outward connection.  Similarly DCD
+going up will be passed through to CTS.
 
-For more information on using the Speech System you are referred to the Acorn
-Speech System User Guide which you can download from :
+Add the Commstar.rom to your Roms.cfg file (see "ROM Software" above) and
+start up BeebEm.  On the Comms menu select the "IP: localhost:25232" and
+"RS432 On/Off".  Type *COMMSTAR to start CommStar.  In Commstar:
+  - Press M to switch to mode 0
+  - Press A to turn off Auto line feed
+  - Press I and then R a few times to set the receive baud to 9600
+  - Press C to enter chat mode
+You should now be able send commands to the modem (tcpser), try typing "AT",
+you should get "OK" back.  You can now "dial" into a server using the "ATD"
+command.  Try connecting to the Ishar MUD server using "ATDishar.com:9999".
 
-http://www.g7jjf.com/docs/acorn_speech_user_guide.pdf  (1202KB)
+To make a direct connection to a server select the "IP: Custom destination"
+option.  This requires you to manually edit the "IP232customip" and
+"IP232customport" parameters in the Preferences.cfg file and reload.
 
-If anyone has any more PHROM images, can they please email them to me so
-I can include them with the distribution.
+An additional option, "IP: IP232 mode", determines if the handshake lines
+are sent down the TCP/IP link or just generated locally from the presence of
+a valid connection.
+
+A second additional option, "IP: RAW comms", disables special processing of
+charater 255 (used with tcpser, so leave RAW mode off when using tcpser).
+
+If on startup, or when ticking the "RS423 On/Off" menu option, BeebEm cannot
+connect to the specified server, or if it loses connection subsequently, it
+will pop up a messagebox and disable RS423.  Select the menu option again to
+try to re-connect and re-enable.
+
+BeebEm will emulate the correct RX baud rate.  This makes for a very
+realistic experience when talking at 1200 baud to a Viewdata host!  TX is
+just sent out as fast as it will go.
+
+
+Realtime Clock Support
+----------------------
+The RTC can be used in Master 128 mode.  The BASIC TIME$ variable can be
+used to read and update the clock:
+  PRINT TIME$
+  TIME$="Mon,22 Jan 1996"
+  TIME$="23:10:42"
+  TIME$="Mon,22 Jan 1996.23:10:42"
 
 
 Menu Options
@@ -630,6 +673,12 @@ File Menu:
                  Quickload (keypad *) so you can save and load without
                  having to go through the menus.
 
+  Screen Capture Options - Select the resolution and file format for screen
+                   capture to file.
+  Capture Screen - Capture the BeebEm screen to a file.  You will be
+                   prompted for a file name.  Note that you can also use
+                   the ALT+keypad 5 shortcut to capture the screen to file.
+
   Video Options - Select the resolution and how many frames get skipped for
                   video capture.  If video and audio get out of sync when
                   playing back then try selecting a lower resolution and
@@ -644,6 +693,25 @@ File Menu:
   End Video     - Stops video capture.
 
   Exit         - Exit BeebEm
+
+Edit Menu:
+
+  Copy              - Copy BASIC program to the clipboard. Sets the printer
+                      destination to the clipboard, enables the printer
+                      output and lists the current program.
+  Paste             - Pastes the clipboard content into BeebEm.
+  Translate CR-LF   - Adds/removes linefeed characters as text is copied and
+                      pasted from the clipboard.
+
+  Import Files to Disc   - Allows files to be added to a DFS disc image.
+                           BeebEm will look for a .INF file containing file
+                           attributes but files without .INF files can also
+                           be imported.  If a file name matches one already
+                           in the disc image the imported file will
+                           overwrite the one in the image.
+  Export Files from Disc - Allows files to be exported from a DFS disc
+                           image. BeebEm will create a .INF file for each
+                           file exported to hold the file attributes.
 
 Comms Menu:
 
@@ -669,6 +737,8 @@ Comms Menu:
   RS423 Destination   - Select where to send the serial port data.
                         Select Microvitec Touch Screen to enable touch
                         screen support.
+                        Select an IP option to route data to a TCP/IP
+                        port (see "Serial Port IP Options" above).
 
 View Menu:
 
@@ -679,6 +749,8 @@ View Menu:
                         will switch on bilinear interpolation.  This will
                         blur the display slightly which will give it a
                         smoother look.
+
+  Smooth Teletext Only - Enable DX smoothing for mode 7 only.
 
   Speed and FPS On/Off - Show or hide the relative speed and the number of
                          frames per second.
@@ -729,8 +801,8 @@ Sound Menu:
   Sound Chip     - Switches the sound chip on or off.  Useful when you want
                    to hear the cassette sounds.
 
-  Sound Effects  - Switches on the sound of the cassette motor and the
-                   sound of tape software loading.
+  Sound Effects  - Options for switching on emulation of cassette motor, tape
+                   software loading and disc drive noise.
 
   44.1 kHz       - Sets the sound sample rate.  The higher it is the better
   22.05 kHz        the sound quality but the slower BeebEm runs.
@@ -820,15 +892,13 @@ Hardware Menu:
                         Serial (printing, comms & tape) emulation.  May
                         speed BeebEm up.
 
-  Sound Block Size    - Selects the amount of sound data that is written
-                        to the sound buffers at any one time.  The smaller
-                        block size may speed BeebEm up.
-
   Econet On/Off       - Switch Econet emulation on or off.  See the Econet
                         section above for more details.
 
   Teletext On/Off     - Switch Teletext emulation on or off.  See the
                         Teletext section above for more details.
+
+  Floppy Drive On/Off - Switch floppy drive emulation on or off.
 
   Hard Drive On/Off   - Switch SCSI/SASI hard drive emulation on or off.
                         See the SCSI/SASI section above for more details.
@@ -839,6 +909,10 @@ Hardware Menu:
 
   User Port RTC Module - Enables the real time clock module.  This is used
                          by the Econet file server software.
+
+  RTC Y2K Adjust On/Off - When enabled the Master 128 real time clock is
+                          adjusted by 20 years to allow for the Y2K issues
+                          in the MOS.
 
 Options Menu:
 
@@ -900,6 +974,12 @@ Options Menu:
                          the folders where you last loaded or saved disc,
                          tape or state files.
 
+  Select User Data Folder - Select the location for the BeebEm data files.
+                         When creating a new folder BeebEm will copy a
+                         default set of data files into the folder.
+                         BeebEm will default to using the last folder
+                         selected.
+
 Help Menu:
 
   View README          - View this file.
@@ -922,6 +1002,8 @@ The following command line options can be passed to BeebEm:
   -KbdCmd <keyboard command string>
   -NoAutoBoot
      - Disable auto-boot when disk image specified
+  -DebugScript <file containing debugger commands>
+     - Opens the debugger and executes the commands
   <disk image file name>
   <tape file name>
   <state file name>
@@ -994,6 +1076,17 @@ using Windows Explorer.  Double clicking on one of these files will
 automatically run it in BeebEm.
 
 
+Registry Information
+--------------------
+
+When BeebEm is installed the following registry entries are created:
+
+  HKEY_LOCAL_MACHINE\SOFTWARE\BeebEm\InstallPath
+  HKEY_LOCAL_MACHINE\SOFTWARE\BeebEm\Version
+
+These can be used by other applications to integrate with BeebEm.
+
+
 Debugger
 --------
 
@@ -1004,45 +1097,26 @@ bring the main window to the front.
 
 Debugger controls:
 
-Break Execution - Stops BeebEm running.  If currently executing in the OS or
+Break           - Stops BeebEm running.  If currently executing in the OS or
                   ROM area and OS/ROM debug is not enabled then BeebEm will
                   only stop when execution moves out of the OS/ROM.  When
                   execution stops the current instruction is displayed.
-Restart         - Starts BeebEm running.
+Continue/Cancel - Starts BeebEm running.
 Trace           - Shows accesses to the various bits of hardware.
 Break           - Breaks execution when the hardware is accessed.
-Debug Host      - Debugs the host processor.
-Debug Parasite  - Debugs the second processor.
-Debug ROM       - Debugs the ROM code (addresses 8000-BFFF).
-Debug OS        - Debugs the OS code (addresses C000-FFFF).
+BRK instruction - Breaks when the BRK instruction is executed.
+Attach debugger to:
+  Host          - Debugs the host processor.
+  Parasite      - Debugs the second processor.
+  ROM           - Debugs the ROM code (addresses 8000-BFFF).
+  OS            - Debugs the OS code (addresses C000-FFFF).
 Breakpoints     - Breaks execution when the address hits one of the
                   configured breakpoints.
+Watches         - Shows contents of configured memory locations.
 Execute Command - Runs the debug command entered into the command box.
 
-Debug commands ([] = optional parameter):
-
-n [count]            - Execute the next [count] instructions.
-m[p] [start] [count] - Memory hex dump.  Use 'mp' to dump parasite memory.
-d[p] [start] [count] - Disassemble instructions.  Use 'dp' for parasite.
-b start [end]        - Set/clear break point.  Can be a single address or
-                       a range of addresses.
-sv                   - Show video registers.
-su                   - Show user via registers.
-ss                   - Show system via registers.
-st                   - Show tube registers.
-w file [count]       - Writes the last [count] lines of the debug window
-                       to a file.  If count is not specified the entire
-                       debug window contents are written.
-                         e.g. w /disassembly.txt 64
-c start byte [byte] ... - Change memory.  Writes bytes starting at a
-                          particular address.
-                         e.g. c 7c00 68 65 6c 6c 6f
-g[p] addr            - Goto address ('gp' for parasite)
-fr file addr         - File read into host RAM
-fw file addr count   - File write from host RAM
-                         e.g. fw screendump 3000 5000
-
-NOTE: All values are specified in hex!
+To get a list of the debug commands available type ? into the Execute
+Command box.  Notes that all values are specified in hex!
 
 The disassembler shows the following information:
 
@@ -1086,8 +1160,7 @@ Model B Plus Specific hardware:
   Four 16K Sideways RAM banks
   16K B+ MOS ROM
   20K Video Shadow RAM
-  8K Filing System RAM
-  4K Screen Operations RAM
+  12K Additional RAM
 
 Master 128 Specific hardware:
 
@@ -1189,21 +1262,14 @@ Troubleshooting
 
 This version of BeebEm will work on Windows 98 or later.  If you have
 Windows 98 or ME then you will need to install DirectX9 and IE6 (available
-from http://www.microsoft.com).
+from http://www.microsoft.com).  For Windows 98 you will need to install an
+older releases of DirectX 9.0c, such as the Aug 2006 release.
 
 When using DirectX9 in full screen mode the menu bar is not visible.  The
 menus can still be opened by using the shortcut keys (such as Alt-F for the
 File menu) but you will also need to click the mouse in the menu bar area
 (top left of screen) to bring the menu in front of the BeebEm screen (some
 repeated clicking is sometimes required!)
-
-There is a problem in Vista with AVI video file generation.  The AVI files
-are corrupted and cannot be played.  This will be fixed by Microsoft and may
-be delivered via Windows Update or appear in Vista SP1.
-
-If you have any problems please email me and I'll try to help out:
-
-  mikebuk@dsl.pipex.com
 
 
 Uninstalling BeebEm
@@ -1229,6 +1295,11 @@ Thanks go to the following people for contributing to BeebEm:
   Ken Lowe
   Jon Welch
   Rob O'Donnell
+  Steve Pick
+  Greg Cook
+  Theo Lindebaum
+  David Sharp
+  Rich Talbot-Watkins
 
 Thanks also to Jordon Russell Software for the excellent Inno Setup
 installation software: <http://www.jrsoftware.org/isinfo.php>
@@ -1238,5 +1309,7 @@ of BeebEm then send me an email.  I cannot promise anything but I may find
 some time to add them.
 
 Mike Wyatt
-mikebuk@dsl.pipex.com
-http://www.mikebuk.dsl.pipex.com/beebem
+beebem.support@googlemail.com
+http://www.mkw.me.uk/beebem
+
+Copyright (C) 2009  Mike Wyatt

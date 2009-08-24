@@ -1,3 +1,23 @@
+/****************************************************************
+BeebEm - BBC Micro and Master 128 Emulator
+Copyright (C) 2007  Mike Wyatt
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public
+License along with this program; if not, write to the Free
+Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+Boston, MA  02110-1301, USA.
+****************************************************************/
+
 // BeebWin preferences support
 
 #include <stdio.h>
@@ -9,7 +29,6 @@
 #include "beebwin.h"
 #include "beebemrc.h"
 #include "6502core.h"
-#include "cRegistry.h"
 #include "disc8271.h"
 #include "disc1770.h"
 #include "sysvia.h"
@@ -31,7 +50,9 @@
 #include "z80mem.h"
 #include "z80.h"
 #include "userkybd.h"
+#ifdef SPEECH_ENABLED
 #include "speech.h"
+#endif
 #include "teletext.h"
 #include "avi.h"
 #include "csw.h"
@@ -76,8 +97,6 @@ extern char DiscLedColour;
 extern const char *WindowTitle;
 extern unsigned char CMOSDefault[64];
 
-cRegistry SysReg;
-
 void BeebWin::LoadPreferences()
 {
     FILE *fd;
@@ -88,16 +107,13 @@ void BeebWin::LoadPreferences()
     char keyData[256];
     unsigned char flag;
     DWORD dword;
-    char prefsFile[_MAX_PATH];
 
-    strcpy(prefsFile, m_UserDataPath);
-    strcat(prefsFile, m_PrefsFile);
-    fd = fopen(prefsFile, "r");
+    fd = fopen(m_PrefsFile, "r");
     if (fd == NULL)
     {
         // No prefs file, will use defaults
         char errstr[500];
-        sprintf(errstr, "Cannot open preferences file:\n  %s\n\nUsing default preferences", prefsFile);
+        sprintf(errstr, "Cannot open preferences file:\n  %s\n\nUsing default preferences", m_PrefsFile);
         MessageBox(m_hWnd, errstr, WindowTitle, MB_OK|MB_ICONERROR);
     }
     else if (fgets(buf, MAX_PREFS_LINE_LEN-1, fd) != NULL)
@@ -129,6 +145,7 @@ void BeebWin::LoadPreferences()
     // Remove obsolete prefs
     m_Prefs.erase("UserKeyMapRow");
     m_Prefs.erase("UserKeyMapCol");
+    m_Prefs.erase("ShowBottomCursorLine");
 
     if(!PrefsGetBinaryValue("MachineType",&MachineType,1))
         MachineType=0;
@@ -145,6 +162,11 @@ void BeebWin::LoadPreferences()
         m_DXSmoothing = flag;
     else
         m_DXSmoothing = true;
+
+    if (PrefsGetBinaryValue("DXSmoothMode7Only",&flag,1))
+        m_DXSmoothMode7Only = flag;
+    else
+        m_DXSmoothMode7Only = false;
 
     if (PrefsGetDWORDValue("DDFullScreenMode",dword))
         m_DDFullScreenMode = dword;
@@ -181,8 +203,6 @@ void BeebWin::LoadPreferences()
     DiscLedColour=LED_COLOUR_TYPE;
     LEDs.ShowDisc=(LED_SHOW_DISC != 0);
     LEDs.ShowKB=LED_SHOW_KB;
-
-    PrefsGetBinaryValue("ShowBottomCursorLine",&ShowCursorLine,1);
 
     if (PrefsGetDWORDValue("MotionBlur",dword))
         m_MotionBlur = dword;
@@ -232,6 +252,8 @@ void BeebWin::LoadPreferences()
         RelaySoundEnabled=0;
     if (!PrefsGetBinaryValue("TapeSoundEnabled",&TapeSoundEnabled,1))
         TapeSoundEnabled=0;
+    if (!PrefsGetBinaryValue("DiscDriveSoundEnabled",&DiscDriveSoundEnabled,1))
+        DiscDriveSoundEnabled=1;
     if (!PrefsGetBinaryValue("UsePrimaryBuffer",&UsePrimaryBuffer,1))
         UsePrimaryBuffer=0;
     if (!PrefsGetBinaryValue("Part Samples",&PartSamples,1))
@@ -357,16 +379,41 @@ void BeebWin::LoadPreferences()
         SerialPortEnabled=0;
     if (!PrefsGetBinaryValue("TouchScreenEnabled",&TouchScreenEnabled,1))
         TouchScreenEnabled=0;
+//  if (!PrefsGetBinaryValue("EthernetPortEnabled",&EthernetPortEnabled,1))
+//      EthernetPortEnabled=false;
+    if (!PrefsGetBinaryValue("IP232localhost",&IP232localhost,1))
+        IP232localhost=0;
+    if (!PrefsGetBinaryValue("IP232custom",&IP232custom,1))
+        IP232custom=0;
+
+    EthernetPortEnabled = (IP232localhost || IP232custom);
+
+    if (!PrefsGetBinaryValue("IP232mode",&IP232mode,1))
+        IP232mode=0;
+    if (!PrefsGetBinaryValue("IP232raw",&IP232raw,1))
+        IP232raw=0;
+    if (PrefsGetDWORDValue("IP232customport",dword))
+        IP232customport = dword;
+    else
+        IP232customport = 25232;
+    m_customport = IP232customport;
+    if (PrefsGetStringValue("IP232customip",m_customip))
+        strcpy(IP232customip, m_customip);
+    else
+        IP232customip[0] = 0;
+
     if (!PrefsGetBinaryValue("SerialPort",&SerialPort,1))
         SerialPort=2;
 
     if (!PrefsGetBinaryValue("EconetEnabled",&EconetEnabled,1))
         EconetEnabled=0;
 
+#ifdef SPEECH_ENABLED
     if (!PrefsGetBinaryValue("SpeechEnabled",&flag,1))
         SpeechDefault=0;
     else
         SpeechDefault=flag;
+#endif
 
     if (!PrefsGetBinaryValue("ArmTube",&ArmTube,1))
         ArmTube=0;
@@ -380,8 +427,10 @@ void BeebWin::LoadPreferences()
     if (!PrefsGetBinaryValue("TubeEnabled",&TubeEnabled,1))
         TubeEnabled=0;
 
+#ifdef M512COPRO_ENABLED
     if (!PrefsGetBinaryValue("Tube186Enabled",&Tube186Enabled,1))
         Tube186Enabled=0;
+#endif
 
     if (!PrefsGetBinaryValue("OpCodes",&OpCodes,1))
         OpCodes=2;
@@ -389,11 +438,13 @@ void BeebWin::LoadPreferences()
         BHardware=0;
     if (!PrefsGetBinaryValue("Teletext Half Mode",&THalfMode,1))
         THalfMode=0;
-    if (!PrefsGetBinaryValue("SoundBlockSize",&SBSize,1))
-        SBSize=0;
 
     if (!PrefsGetBinaryValue("TeleTextAdapterEnabled",&TeleTextAdapterEnabled,1))
         TeleTextAdapterEnabled=0;
+
+    if (!PrefsGetBinaryValue("FloppyDriveEnabled",&Disc8271Enabled,1))
+        Disc8271Enabled=1;
+    Disc1770Enabled=Disc8271Enabled;
 
     if (!PrefsGetBinaryValue("HardDriveEnabled",&HardDriveEnabled,1))
         HardDriveEnabled=0;
@@ -402,6 +453,9 @@ void BeebWin::LoadPreferences()
         RTC_Enabled=0;
     else
         RTC_Enabled=flag;
+
+    if (!PrefsGetBinaryValue("RTCY2KAdjust",&RTCY2KAdjust,1))
+        RTCY2KAdjust=1;
 
     if (PrefsGetDWORDValue("CaptureResolution",dword))
         m_MenuIdAviResolution = dword;
@@ -412,6 +466,16 @@ void BeebWin::LoadPreferences()
         m_MenuIdAviSkip = dword;
     else
         m_MenuIdAviSkip = IDM_VIDEOSKIP1;
+
+    if (PrefsGetDWORDValue("BitmapCaptureResolution",dword))
+        m_MenuIdCaptureResolution = dword;
+    else
+        m_MenuIdCaptureResolution = IDM_CAPTURERES3;
+
+    if (PrefsGetDWORDValue("BitmapCaptureFormat",dword))
+        m_MenuIdCaptureFormat = dword;
+    else
+        m_MenuIdCaptureFormat = IDM_CAPTUREBMP;
 
     RECT rect;
     if (PrefsGetBinaryValue("WindowPos",&rect,sizeof(rect)))
@@ -477,14 +541,18 @@ void BeebWin::LoadPreferences()
     {
         PrefsSetStringValue("AVIPath", "");
     }
+    if (m_Prefs.find("ImagePath") == m_Prefs.end())
+    {
+        PrefsSetStringValue("ImagePath", "");
+    }
 
     // Update prefs version
-    PrefsSetStringValue("PrefsVersion", "1.2");
+    PrefsSetStringValue("PrefsVersion", "1.6");
 
     // Windows key enable/disable still comes from registry
     int binsize = 24;
-    if (SysReg.GetBinaryValue(HKEY_LOCAL_MACHINE,CFG_KEYBOARD_LAYOUT,
-                              CFG_SCANCODE_MAP,keyData,&binsize) && binsize==24)
+    if (RegGetBinaryValue(HKEY_LOCAL_MACHINE,CFG_KEYBOARD_LAYOUT,
+                          CFG_SCANCODE_MAP,keyData,&binsize) && binsize==24)
         m_DisableKeysWindows=1;
     else
         m_DisableKeysWindows=0;
@@ -497,6 +565,7 @@ void BeebWin::SavePreferences(bool saveAll)
     char CfgName[256];
     unsigned char flag;
     char keyData[256];
+    DWORD dword;
 
     if (saveAll)
     {
@@ -505,6 +574,8 @@ void BeebWin::SavePreferences(bool saveAll)
         PrefsSetDWORDValue("DisplayRenderer",m_DisplayRenderer);
         flag = m_DXSmoothing;
         PrefsSetBinaryValue("DXSmoothing",&flag,1);
+        flag = m_DXSmoothMode7Only;
+        PrefsSetBinaryValue("DXSmoothMode7Only",&flag,1);
         PrefsSetDWORDValue("DDFullScreenMode",m_DDFullScreenMode);
         PrefsSetDWORDValue(CFG_VIEW_WIN_SIZE,m_MenuIdWinSize);
         flag = m_isFullScreen;
@@ -516,7 +587,6 @@ void BeebWin::SavePreferences(bool saveAll)
         PrefsSetBinaryValue("HideMenuEnabled",&HideMenuEnabled,1);
         LEDByte=(DiscLedColour<<2)|((LEDs.ShowDisc?1:0)<<1)|(LEDs.ShowKB?1:0);
         PrefsSetBinaryValue("LED Information",&LEDByte,1);
-        PrefsSetBinaryValue("ShowBottomCursorLine",&ShowCursorLine,1);
         flag = m_MotionBlur;
         PrefsSetDWORDValue( "MotionBlur", m_MotionBlur);
         PrefsSetBinaryValue("MotionBlurIntensities",m_BlurIntensities,8);
@@ -532,6 +602,7 @@ void BeebWin::SavePreferences(bool saveAll)
         PrefsSetDWORDValue( CFG_SOUND_VOLUME, m_MenuIdVolume);
         PrefsSetBinaryValue("RelaySoundEnabled",&RelaySoundEnabled,1);
         PrefsSetBinaryValue("TapeSoundEnabled",&TapeSoundEnabled,1);
+        PrefsSetBinaryValue("DiscDriveSoundEnabled",&DiscDriveSoundEnabled,1);
         PrefsSetBinaryValue("UsePrimaryBuffer",&UsePrimaryBuffer,1);
         PrefsSetBinaryValue("Part Samples",&PartSamples,1);
         PrefsSetBinaryValue("ExponentialVolume",&SoundExponentialVolume,1);
@@ -575,29 +646,47 @@ void BeebWin::SavePreferences(bool saveAll)
         PrefsSetBinaryValue("UnlockTape",&flag,1);
         PrefsSetBinaryValue("SerialPortEnabled",&SerialPortEnabled,1);
         PrefsSetBinaryValue("TouchScreenEnabled",&TouchScreenEnabled,1);
+//      PrefsSetBinaryValue("EthernetPortEnabled",&EthernetPortEnabled,1);
+        PrefsSetBinaryValue("IP232localhost",&IP232localhost,1);
+        PrefsSetBinaryValue("IP232custom",&IP232custom,1);
+        dword = IP232customport;
+        PrefsSetBinaryValue("IP232mode",&IP232mode,1);
+        PrefsSetBinaryValue("IP232raw",&IP232raw,1);
+        PrefsSetDWORDValue("IP232customport", dword);
+        PrefsSetStringValue("IP232customip", m_customip);
+
+
         PrefsSetBinaryValue("SerialPort",&SerialPort,1);
 
         PrefsSetBinaryValue("EconetEnabled",&EconetEnabled,1); //Rob
+#ifdef SPEECH_ENABLED
         flag=SpeechDefault;
         PrefsSetBinaryValue("SpeechEnabled",&flag,1);
+#endif
 
         PrefsSetBinaryValue("ArmTube",&ArmTube,1);
         PrefsSetBinaryValue("TorchTube",&TorchTube,1);
         PrefsSetBinaryValue("AcornZ80",&AcornZ80,1);
         PrefsSetBinaryValue("TubeEnabled",&TubeEnabled,1);
+#ifdef M512COPRO_ENABLED
         PrefsSetBinaryValue("Tube186Enabled",&Tube186Enabled,1);
+#endif
 
         PrefsSetBinaryValue("OpCodes",&OpCodes,1);
         PrefsSetBinaryValue("Basic Hardware",&BHardware,1);
         PrefsSetBinaryValue("Teletext Half Mode",&THalfMode,1);
-        PrefsSetBinaryValue("SoundBlockSize",&SBSize,1);
         PrefsSetBinaryValue("TeleTextAdapterEnabled",&TeleTextAdapterEnabled,1);
+        PrefsSetBinaryValue("FloppyDriveEnabled",&Disc8271Enabled,1);
         PrefsSetBinaryValue("HardDriveEnabled",&HardDriveEnabled,1);
         flag = RTC_Enabled;
         PrefsSetBinaryValue("RTCEnabled",&flag,1);
+        PrefsSetBinaryValue("RTCY2KAdjust",&RTCY2KAdjust,1);
 
         PrefsSetDWORDValue("CaptureResolution",m_MenuIdAviResolution);
         PrefsSetDWORDValue("FrameSkip",m_MenuIdAviSkip);
+
+        PrefsSetDWORDValue("BitmapCaptureResolution",m_MenuIdCaptureResolution);
+        PrefsSetDWORDValue("BitmapCaptureFormat",m_MenuIdCaptureFormat);
 
         RECT rect;
         GetWindowRect(m_hWnd,&rect);
@@ -619,15 +708,12 @@ void BeebWin::SavePreferences(bool saveAll)
 
     // Write the file
     FILE *fd;
-    char prefsFile[_MAX_PATH];
 
-    strcpy(prefsFile, m_UserDataPath);
-    strcat(prefsFile, m_PrefsFile);
-    fd = fopen(prefsFile, "w");
+    fd = fopen(m_PrefsFile, "w");
     if (fd == NULL)
     {
         char errstr[500];
-        sprintf(errstr, "Failed to write preferences file:\n  %s", prefsFile);
+        sprintf(errstr, "Failed to write preferences file:\n  %s", m_PrefsFile);
         MessageBox(m_hWnd, errstr, WindowTitle, MB_OK|MB_ICONERROR);
     }
     else

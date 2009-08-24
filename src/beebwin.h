@@ -1,22 +1,29 @@
-/****************************************************************************/
-/*                               Beebem                                     */
-/*                               ------                                     */
-/* This program may be distributed freely within the following restrictions:*/
-/*                                                                          */
-/* 1) You may not charge for this program or for any part of it.            */
-/* 2) This copyright message must be distributed with all copies.           */
-/* 3) This program must be distributed complete with source code.  Binary   */
-/*    only distribution is not permitted.                                   */
-/* 4) The author offers no warrenties, or guarentees etc. - you use it at   */
-/*    your own risk.  If it messes something up or destroys your computer   */
-/*    thats YOUR problem.                                                   */
-/* 5) You may use small sections of code from this program in your own      */
-/*    applications - but you must acknowledge its use.  If you plan to use  */
-/*    large sections then please ask the author.                            */
-/*                                                                          */
-/* If you do not agree with any of the above then please do not use this    */
-/* program.                                                                 */
-/****************************************************************************/
+/****************************************************************
+BeebEm - BBC Micro and Master 128 Emulator
+Copyright (C) 1994  Nigel Magnay
+Copyright (C) 1997  Mike Wyatt
+Copyright (C) 1998  Robert Schmidt
+Copyright (C) 2001  Richard Gellman
+Copyright (C) 2004  Ken Lowe
+Copyright (C) 2004  Rob O'Donnell
+Copyright (C) 2005  Jon Welch
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public
+License along with this program; if not, write to the Free
+Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+Boston, MA  02110-1301, USA.
+****************************************************************/
+
 /* Mike Wyatt and NRM's port to win32 - 7/6/97 */
 
 #ifndef BEEBWIN_HEADER
@@ -122,6 +129,7 @@ class BeebWin  {
     ~BeebWin();
 
     void Initialise();
+    void ApplyPrefs();
     void Shutdown();
 
     void UpdateModelType();
@@ -208,8 +216,12 @@ class BeebWin  {
     void ResetTiming(void);
     int TranslateKey(int, int, int&, int&);
     void ParseCommandLine(void);
+    void CheckForLocalPrefs(const char *path, bool bLoadPrefs);
+    void FindCommandLineFile(void);
     void HandleCommandLineFile(void);
     bool CheckUserDataPath(void);
+    void SelectUserDataPath(void);
+    void StoreUserDataPath(void);
     void NewTapeImage(char *FileName);
     const char *GetAppPath(void) { return m_AppPath; }
     const char *GetUserDataPath(void) { return m_UserDataPath; }
@@ -222,6 +234,16 @@ class BeebWin  {
     void TextViewSpeechSync(void);
     void TextViewSyncWithBeebCursor(void);
     void HandleTimer(void);
+    void doCopy(void);
+    void doPaste(void);
+    void SetupClipboard(void);
+    void ResetClipboard(void);
+    void CopyKey(int data);
+    int PasteKey(int addr);
+    void CaptureBitmapPending(bool autoFilename);
+
+    void SaveEmuUEF(FILE *SUEF);
+    void LoadEmuUEF(FILE *SUEF,int Version);
 
     unsigned char cols[256];
     HMENU       m_hMenu;
@@ -269,12 +291,17 @@ class BeebWin  {
     int         m_AMXYSize;
     int         m_AMXAdjust;
     int         m_DisplayRenderer;
+    int         m_CurrentDisplayRenderer;
     int         m_DDFullScreenMode;
     bool        m_isFullScreen;
     bool        m_AutoSavePrefsCMOS;
     bool        m_AutoSavePrefsFolders;
     bool        m_AutoSavePrefsAll;
     bool        m_AutoSavePrefsChanged;
+
+    char        m_customip [20];        //IP232
+    int         m_customport;
+
 
     HDC         m_hDC;
     HWND        m_hWnd;
@@ -287,6 +314,14 @@ class BeebWin  {
     int         m_ScreenRefreshCount;
     double      m_RelativeSpeed;
     double      m_FramesPerSecond;
+
+    char        m_clipboard[32768];
+    int         m_clipboardlen;
+    int         m_clipboardptr;
+    char        m_printerbuffer[1024 * 1024];
+    int         m_printerbufferlen;
+    int         m_OSRDCH;
+    bool        m_translateCRLF;
 
     int         m_MenuIdPrinterPort;
     char        m_PrinterFileName[_MAX_PATH];
@@ -304,14 +339,23 @@ class BeebWin  {
     int         m_LastNLines;
     int         m_MotionBlur;
     char        m_BlurIntensities[8];
-    char *      m_CommandLineFileName;
+    char        m_CommandLineFileName[_MAX_PATH];
     char        m_KbdCmd[1024];
+    char        m_DebugScript[_MAX_PATH];
     int         m_KbdCmdPos;
     int         m_KbdCmdKey;
     bool        m_KbdCmdPress;
     int         m_KbdCmdDelay;
     int         m_KbdCmdLastCycles;
     bool        m_NoAutoBoot;
+
+    // Bitmap capture vars
+    ULONG_PTR   m_gdiplusToken;
+    bool        m_CaptureBitmapPending;
+    bool        m_CaptureBitmapAutoFilename;
+    char        m_CaptureFileName[MAX_PATH];
+    int         m_MenuIdCaptureResolution;
+    int         m_MenuIdCaptureFormat;
 
     // AVI vars
     bmiData     m_Avibmi;
@@ -335,6 +379,7 @@ class BeebWin  {
     LPDIRECTDRAWSURFACE     m_DDSOne;       // Offscreen surface 1
     LPDIRECTDRAWSURFACE2    m_DDS2One;      // Offscreen surface 1
     BOOL                    m_DXSmoothing;
+    BOOL                    m_DXSmoothMode7Only;
     LPDIRECTDRAWCLIPPER     m_Clipper;      // clipper for primary
 
     // Direct3D9 stuff
@@ -371,6 +416,9 @@ class BeebWin  {
     void UpdateMonitorMenu();
     void UpdateSerialMenu(HMENU hMenu);
     void UpdateEconetMenu(HMENU hMenu);
+public:
+    void ExternUpdateSerialMenu();
+private:
     void UpdateSFXMenu();
     void UpdateDisableKeysMenu();
     void UpdateDisplayRendererMenu(void);
@@ -382,6 +430,7 @@ class BeebWin  {
     void ReinitDX(void);
   private:
     void ExitDX(void);
+    void UpdateSmoothing(void);
 
     // DirectDraw
     HRESULT InitDirectDraw(void);
@@ -399,7 +448,7 @@ class BeebWin  {
     void TranslateVolume(void);
     void TranslateTiming(void);
     void TranslateKeyMapping(void);
-    int ReadDisc(int Drive,HMENU dmenu);
+    int ReadDisc(int Drive,HMENU dmenu, bool bCheckForPrefs);
     void LoadTape(void);
     void InitJoystick(void);
     void ResetJoystick(void);
@@ -407,6 +456,8 @@ class BeebWin  {
     void SaveState(void);
     void NewDiscImage(int Drive);
     void EjectDiscImage(int Drive);
+    void ExportDiscFiles(int menuId);
+    void ImportDiscFiles(int menuId);
     void ToggleWriteProtect(int Drive);
     void SetWindowAttributes(bool wasFullScreen);
     void TranslateAMX(void);
@@ -414,6 +465,9 @@ class BeebWin  {
     void TogglePrinter(void);
     void TranslatePrinterPort(void);
     void CaptureVideo(void);
+    void CaptureBitmap(int x, int y, int sx, int sy);
+    bool GetImageFile(char *FileName);
+    bool GetImageEncoderClsid(WCHAR *mimeType, CLSID *encoderClsid);
     void InitTextToSpeech(void);
     bool TextToSpeechSearch(TextToSpeechSearchDirection dir,
                             TextToSpeechSearchType type);
@@ -430,6 +484,11 @@ class BeebWin  {
     void SaveUserKeyMap(void);
     bool ReadKeyMap(char *filename, KeyMap *keymap);
     bool WriteKeyMap(char *filename, KeyMap *keymap);
+    bool RegCreateKey(HKEY hKeyRoot, LPSTR lpSubKey);
+    bool RegGetBinaryValue(HKEY hKeyRoot, LPSTR lpSubKey, LPSTR lpValue, PVOID pData, int* pnSize);
+    bool RegSetBinaryValue(HKEY hKeyRoot, LPSTR lpSubKey, LPSTR lpValue, PVOID pData, int* pnSize);
+    bool RegGetStringValue(HKEY hKeyRoot, LPSTR lpSubKey, LPSTR lpValue, LPSTR pData, DWORD dwSize);
+    bool RegSetStringValue(HKEY hKeyRoot, LPSTR lpSubKey, LPSTR lpValue, LPSTR pData);
 
     // Preferences
     PrefsMap m_Prefs;
@@ -445,6 +504,4 @@ class BeebWin  {
 
 }; /* BeebWin */
 
-void SaveEmuUEF(FILE *SUEF);
-void LoadEmuUEF(FILE *SUEF,int Version);
 #endif

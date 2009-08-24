@@ -1,26 +1,28 @@
-/****************************************************************************/
-/*              Beebem - (c) David Alan Gilbert 1994/1995                   */
-/*              -----------------------------------------                   */
-/* This program may be distributed freely within the following restrictions:*/
-/*                                                                          */
-/* 1) You may not charge for this program or for any part of it.            */
-/* 2) This copyright message must be distributed with all copies.           */
-/* 3) This program must be distributed complete with source code.  Binary   */
-/*    only distribution is not permitted.                                   */
-/* 4) The author offers no warrenties, or guarentees etc. - you use it at   */
-/*    your own risk.  If it messes something up or destroys your computer   */
-/*    thats YOUR problem.                                                   */
-/* 5) You may use small sections of code from this program in your own      */
-/*    applications - but you must acknowledge its use.  If you plan to use  */
-/*    large sections then please ask the author.                            */
-/*                                                                          */
-/* If you do not agree with any of the above then please do not use this    */
-/* program.                                                                 */
-/* Please report any problems to the author at beebem@treblig.org           */
-/****************************************************************************/
+/****************************************************************
+BeebEm - BBC Micro and Master 128 Emulator
+Copyright (C) 1994  David Alan Gilbert
+Copyright (C) 1997  Mike Wyatt
+Copyright (C) 2001  Richard Gellman
+Copyright (C) 2008  Rich Talbot-Watkins
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public
+License along with this program; if not, write to the Free
+Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+Boston, MA  02110-1301, USA.
+****************************************************************/
+
 /* Win32 port - Mike Wyatt 7/6/97 */
 /* Conveted Win32 port to use DirectSound - Mike Wyatt 11/1/98 */
-// 14/04/01 - Proved that I AM better than DirectSound, by fixing the code thereof ;P
 
 #include "beebsound.h"
 
@@ -47,22 +49,40 @@
 #include "uefstate.h"
 #include "avi.h"
 #include "main.h"
+#ifdef SPEECH_ENABLED
 #include "speech.h"
+#endif
 
 extern AVIWriter *aviWriter;
 
 //  #define DEBUGSOUNDTOFILE
 
-#define PREFSAMPLERATE 22050
+#define PREFSAMPLERATE 44100
 #define MAXBUFSIZE 32768
 
 static unsigned char SoundBuf[MAXBUFSIZE];
-static unsigned char RelayOnBuf[2048];
-static unsigned char RelayOffBuf[2048];
 unsigned char SpeechBuf[MAXBUFSIZE];
 
-static unsigned char *PROnBuf=RelayOnBuf;
-static unsigned char *PROffBuf=RelayOffBuf;
+struct SoundSample
+{
+    const char *pFilename;
+    unsigned char *pBuf;
+    int len;
+    int pos;
+    bool playing;
+    bool repeat;
+};
+static SoundSample SoundSamples[] = {
+    { "RelayOn.snd", NULL, 0, 0, false, false },
+    { "RelayOff.snd", NULL, 0, 0, false, false },
+    { "DriveMotor.snd", NULL, 0, 0, false, false },
+    { "HeadLoad.snd", NULL, 0, 0, false, false },
+    { "HeadUnload.snd", NULL, 0, 0, false, false },
+    { "HeadSeek.snd", NULL, 0, 0, false, false },
+    { "HeadStep.snd", NULL, 0, 0, false, false }
+};
+#define NUM_SOUND_SAMPLES (sizeof(SoundSamples)/sizeof(SoundSample))
+static bool SoundSamplesLoaded = false;
 
 static LPDIRECTSOUND DSound = NULL;
 static LPDIRECTSOUNDBUFFER DSB1 = NULL;
@@ -71,6 +91,7 @@ int UsePrimaryBuffer=0;
 int SoundEnabled = 1;
 int DirectSoundEnabled = 0;
 int RelaySoundEnabled = 0;
+int DiscDriveSoundEnabled = 0;
 int SoundChipEnabled = 1;
 int SoundSampleRate = PREFSAMPLERATE;
 int SoundVolume = 3;
@@ -81,9 +102,7 @@ char SoundExponentialVolume = 1;
 
 /* Number of places to shift the volume */
 #define VOLMAG 3
-#define WRITE_ADJUST ((samplerate/50)*2)
 
-static int RelayLen[3]={0,398,297}; // Relay samples
 int Speech[3];
 
 FILE *sndlog=NULL;
@@ -119,14 +138,12 @@ void PlayUpTil(double DestTime);
 int GetVol(int vol);
 BOOL bReRead=FALSE;
 volatile BOOL bDoSound=TRUE;
-int WriteOffset=0; int SampleAdjust=0;
-char Relay=0; int RelayPos=0;
+int WriteOffset=0;
 LARGE_INTEGER PFreq,LastPCount,CurrentPCount;
 double CycleRatio;
 struct AudioType TapeAudio; // Tape audio decoder stuff
 bool TapeSoundEnabled;
 int PartSamples=1;
-int SBSize=1;
 bool Playing;
 
 /****************************************************************************/
@@ -147,7 +164,7 @@ HRESULT WriteToSoundBuffer(PBYTE lpbSoundData)
         bReRead=FALSE;
         // Blank off the buffer
         hr = DSB1->Lock(0, 0, &lpvPtr1,
-        &dwBytes1, &lpvPtr2, &dwBytes2, DSBLOCK_ENTIREBUFFER);
+                        &dwBytes1, &lpvPtr2, &dwBytes2, DSBLOCK_ENTIREBUFFER);
         if(hr == DSERR_BUFFERLOST)
         {
             hr = DSB1->Restore();
@@ -164,19 +181,19 @@ HRESULT WriteToSoundBuffer(PBYTE lpbSoundData)
 
     if (bReRead) {
         DSB1->GetCurrentPosition(NULL,&CWC);
-        WriteOffset=CWC+WRITE_ADJUST;
+        WriteOffset=CWC+SoundBufferSize*2;
         if (WriteOffset>=TSoundBufferSize) WriteOffset-=TSoundBufferSize;
         bReRead=FALSE;
     }
     // Obtain write pointer.
     hr = DSB1->Lock(WriteOffset, SoundBufferSize, &lpvPtr1,
-    &dwBytes1, &lpvPtr2, &dwBytes2, 0);
+                    &dwBytes1, &lpvPtr2, &dwBytes2, 0);
     if(hr == DSERR_BUFFERLOST)
     {
         hr = DSB1->Restore();
         if (hr == DS_OK)
             hr = DSB1->Lock(WriteOffset, SoundBufferSize,
-                &lpvPtr1, &dwBytes1, &lpvPtr2, &dwBytes2, 0);
+                            &lpvPtr1, &dwBytes1, &lpvPtr2, &dwBytes2, 0);
     }
     if(DS_OK == hr)
     {
@@ -192,16 +209,12 @@ HRESULT WriteToSoundBuffer(PBYTE lpbSoundData)
     // Update pointers
     WriteOffset+=SoundBufferSize;
     if (WriteOffset>=TSoundBufferSize) WriteOffset-=TSoundBufferSize;
+
     // Check for pointer desync
     DSB1->GetCurrentPosition(NULL,&CWC);
     CDiff=WriteOffset-CWC;
     if (CDiff<0) CDiff=(WriteOffset+TSoundBufferSize)-CWC;
-    if (abs(CDiff)>(signed)(WRITE_ADJUST*2)) bReRead=TRUE;
-    SampleAdjust--;
-    if (SampleAdjust==0) {
-        SampleAdjust=2;
-        SoundBufferSize=(SBSize)?444:220; // 110
-    } else SoundBufferSize=(SBSize)?440:221; // 111
+    if (abs(CDiff)>(signed)(SoundBufferSize*4)) bReRead=TRUE;
     if (!Playing) {
         DSB1->SetCurrentPosition(SoundBufferSize+1);
         hr=DSB1->Play(0,0,DSBPLAY_LOOPING);
@@ -239,7 +252,9 @@ void PlayUpTil(double DestTime) {
     int tmptotal,channel,bufinc,tapetotal;
     char Extras;
     int SpeechPtr = 0;
+    int i;
 
+#ifdef SPEECH_ENABLED
     if (MachineType != 3 && SpeechEnabled)
     {
         SpeechPtr = 0;
@@ -249,6 +264,7 @@ void PlayUpTil(double DestTime) {
             len = MAXBUFSIZE;
         tms5220_update(SpeechBuf, len);
     }
+#endif
 
     while (DestTime>OurTime) {
 
@@ -386,12 +402,26 @@ void PlayUpTil(double DestTime) {
                 }
             }
 
+#ifdef SPEECH_ENABLED
             // Mix in speech sound
             if (SpeechEnabled) if (MachineType != 3) tmptotal += (SpeechBuf[SpeechPtr++]-128)*10;
+#endif
 
-            // Mix in relay sound here
-            if (Relay==1) tmptotal+=(RelayOffBuf[RelayPos++]-127)*10;
-            if (Relay==2) tmptotal+=(RelayOnBuf[RelayPos++]-127)*10;
+            // Mix in sound samples here
+            for (i = 0; i < NUM_SOUND_SAMPLES; ++i) {
+                if (SoundSamples[i].playing) {
+                    tmptotal+=(SoundSamples[i].pBuf[SoundSamples[i].pos]-128)*10;
+                    Extras++;
+                    SoundSamples[i].pos += (44100 / samplerate);
+                    if (SoundSamples[i].pos >= SoundSamples[i].len) {
+                        if (SoundSamples[i].repeat)
+                            SoundSamples[i].pos = 0;
+                        else
+                            SoundSamples[i].playing = false;
+                    }
+                }
+            }
+
             if (TapeSoundEnabled) {
                 // Mix in tape sound here
                 tapetotal=0;
@@ -418,12 +448,12 @@ void PlayUpTil(double DestTime) {
             }
 
             /* Make it a bit louder under Windows */
-            if (Relay) Extras++;
-            if (TapeAudio.Enabled) Extras++;
-            if (Extras) tmptotal/=4; else tmptotal=0;
+            if (Extras)
+                tmptotal/=Extras;
+            else
+                tmptotal=0;
+
             SoundBuf[bufptr] = (tmptotal/SoundVolume)+128;
-            // end of for loop
-            if (RelayPos>=RelayLen[Relay]) Relay=0;
         } /* buffer loop */
 
         /* Only write data when buffer is full */
@@ -509,8 +539,8 @@ HRESULT CreateSecondarySoundBuffer(void)
 
     // Need default controls (pan, volume, frequency).
     dsbdesc.dwFlags = DSBCAPS_GETCURRENTPOSITION2; // | DSBCAPS_STICKYFOCUS;
-    dsbdesc.dwBufferBytes = 32768;
-    TSoundBufferSize=32768;
+    dsbdesc.dwBufferBytes = MAXBUFSIZE;
+    TSoundBufferSize = MAXBUFSIZE;
     dsbdesc.lpwfxFormat = (LPWAVEFORMATEX)&wf;
 
     // Create buffer.
@@ -592,34 +622,31 @@ static void InitAudioDev(int sampleratein) {
         if (hr==DS_OK) SoundEnabled=1;
 }; /* InitAudioDev */
 
-void LoadRelaySounds(void) {
-    /* Loads in the relay sound effects into buffers */
-    FILE *RelayFile;
-    char RelayFileName[256];
-    char *PRFN=RelayFileName;
-    strcpy(PRFN,mainWin->GetAppPath());
-    strcat(PRFN,"RelayOn.SND");
-    RelayFile=fopen(PRFN,"rb");
-    if (RelayFile!=NULL) {
-        fread(RelayOnBuf,1,2048,RelayFile);
-        fclose(RelayFile);
-    }
-    else {
-        char  errstr[200];
-        sprintf(errstr,"Could not open Relay ON Sound");
-        MessageBox(GETHWND,errstr,WindowTitle,MB_OK|MB_ICONERROR);
-    }
-    strcpy(PRFN,mainWin->GetAppPath());
-    strcat(PRFN,"RelayOff.SND");
-    RelayFile=fopen(PRFN,"rb");
-    if (RelayFile!=NULL) {
-        fread(RelayOffBuf,1,2048,RelayFile);
-        fclose(RelayFile);
-    }
-    else {
-        char  errstr[200];
-        sprintf(errstr,"Could not open Relay OFF Sound");
-        MessageBox(GETHWND,errstr,WindowTitle,MB_OK|MB_ICONERROR);
+void LoadSoundSamples(void) {
+    FILE *fd;
+    char FileName[256];
+    int i;
+
+    if (!SoundSamplesLoaded) {
+        for (i = 0; i < NUM_SOUND_SAMPLES; ++i) {
+            strcpy(FileName, mainWin->GetAppPath());
+            strcat(FileName, SoundSamples[i].pFilename);
+            fd = fopen(FileName, "rb");
+            if (fd != NULL) {
+                fseek(fd, 0, SEEK_END);
+                SoundSamples[i].len = ftell(fd);
+                SoundSamples[i].pBuf = (unsigned char *)malloc(SoundSamples[i].len);
+                fseek(fd, 0, SEEK_SET);
+                fread(SoundSamples[i].pBuf, 1, SoundSamples[i].len, fd);
+                fclose(fd);
+            }
+            else {
+                char errstr[200];
+                sprintf(errstr,"Could not open sound sample file:\n  %s", FileName);
+                MessageBox(GETHWND,errstr,WindowTitle,MB_OK|MB_ICONERROR);
+            }
+        }
+        SoundSamplesLoaded = true;
     }
 }
 
@@ -683,9 +710,8 @@ void SoundInit() {
   if (SoundSampleRate == 44100) SoundAutoTriggerTime = 5000;
   if (SoundSampleRate == 22050) SoundAutoTriggerTime = 10000;
   if (SoundSampleRate == 11025) SoundAutoTriggerTime = 20000;
-  SampleAdjust=4;
-  SoundBufferSize=111;
-  LoadRelaySounds();
+  SoundBufferSize=SoundSampleRate/50;
+  LoadSoundSamples();
   bReRead=TRUE;
   SoundTrigger=TotalCycles+SoundAutoTriggerTime;
 }; /* SoundInit */
@@ -823,10 +849,26 @@ void DumpSound(void) {
 }
 
 void ClickRelay(unsigned char RState) {
-  if (RelaySoundEnabled) {
-    RelayPos=0;
-    Relay=RState+1;
-  }
+    if (RelaySoundEnabled) {
+        if (RState) {
+            SoundSamples[SAMPLE_RELAY_ON].pos = 0;
+            SoundSamples[SAMPLE_RELAY_ON].playing = true;
+        }
+        else {
+            SoundSamples[SAMPLE_RELAY_OFF].pos = 0;
+            SoundSamples[SAMPLE_RELAY_OFF].playing = true;
+        }
+    }
+}
+
+void PlaySoundSample(int sample, bool repeat) {
+    SoundSamples[sample].pos = 0;
+    SoundSamples[sample].playing = true;
+    SoundSamples[sample].repeat = repeat;
+}
+
+void StopSoundSample(int sample) {
+    SoundSamples[sample].playing = false;
 }
 
 int GetVol(int vol) {

@@ -1,27 +1,29 @@
+/****************************************************************
+BeebEm - BBC Micro and Master 128 Emulator
+Copyright (C) 2001  Richard Gellman
+Copyright (C) 2005  Greg Cook
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public
+License along with this program; if not, write to the Free
+Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+Boston, MA  02110-1301, USA.
+****************************************************************/
+
 /*
 WD1770 FDC Disc Support for BeebEm
 
 Written by Richard Gellman - Feb 2001
-
-You may not distribute this entire file separate from the whole BeebEm distribution.
-
-You may use sections or all of this code for your own uses, provided that:
-
-1) It is not a separate file in itself.
-2) This copyright message is included
-3) Acknowledgement is made to the author, and any aubsequent authors of additional code.
-
-The code may be modified as required, and freely distributed as such authors see fit,
-provided that:
-
-1) Acknowledgement is made to the author, and any subsequent authors of additional code
-2) Indication is made of modification.
-
-Absolutely no warranties/guarantees are made by using this code. You use and/or run this code
-at your own risk. The code is classed by the author as "unlikely to cause problems as far as
-can be determined under normal use".
-
--- end of legal crap - Richard Gellman :) */
+*/
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -33,6 +35,7 @@ can be determined under normal use".
 #include "uefstate.h"
 #include "z80mem.h"
 #include "z80.h"
+#include "beebsound.h"
 
 extern FILE *tlog;
 extern int trace;
@@ -59,11 +62,15 @@ unsigned char CStepRate=StepRate[0];
 unsigned char ESpinUp=0;
 unsigned char EVerify=0;
 bool LightsOn[2]={FALSE,FALSE};
+bool HeadLoaded[2]={FALSE,FALSE};
 // End of control bits
 int ByteCount=0;
 long DataPos;
 char errstr[250];
+unsigned char Disc1770Enabled=1;
 
+/* File names of loaded disc images */
+static char DscFileNames[2][256];
 
 FILE *Disc0; // File handlers for the disc drives 0 and 1
 FILE *Disc1;
@@ -95,7 +102,7 @@ bool InvertTR00; // Needed because the bloody stupid watford board inverts the i
 // A few defines here
 #define DENSITY_MISMATCH DiskDensity[CurrentDrive]!=SelectedDensity
 
-#define SPIN_DOWN_TIME 750000 // .750 Milliseconds
+#define SPIN_DOWN_TIME 4000000 // 2secs
 #define SETTLE_TIME 30000 // 30 Milliseconds
 #define ONE_REV_TIME 500000 // 1 sixth of a second - used for density mismatch
 #define SPIN_UP_TIME (ONE_REV_TIME*3) // Two Seconds
@@ -115,6 +122,8 @@ static void ResetStatus(unsigned char bit) {
 }
 
 unsigned char Read1770Register(unsigned char Register) {
+    if (!Disc1770Enabled)
+        return 0xFF;
     // ResetStatus(5);
     //fprintf(fdclog,"Read of Register %d - Status is %02X\n",Register,Status);
     // Read 1770 Register. Note - NOT the FDC Control register @ &FE24
@@ -146,12 +155,28 @@ unsigned char Read1770Register(unsigned char Register) {
 void SetMotor(char Drive,bool State) {
     if (Drive==0) LEDs.Disc0=State; else LEDs.Disc1=State;
     if (State) SetStatus(7);
+    if (State) {
+        if (DiscDriveSoundEnabled && !HeadLoaded[Drive]) {
+            PlaySoundSample(SAMPLE_DRIVE_MOTOR, true);
+            PlaySoundSample(SAMPLE_HEAD_LOAD, false);
+            HeadLoaded[Drive] = TRUE;
+        }
+    }
+    else {
+        StopSoundSample(SAMPLE_DRIVE_MOTOR);
+        if (DiscDriveSoundEnabled && HeadLoaded[Drive]) {
+            PlaySoundSample(SAMPLE_HEAD_UNLOAD, false);
+            HeadLoaded[Drive] = FALSE;
+        }
+    }
 }
 
 void Write1770Register(unsigned char Register, unsigned char Value) {
     unsigned char ComBits,HComBits;
     int SectorCycles=0; // Number of cycles to wait for sector to come round
 
+    if (!Disc1770Enabled)
+        return;
     //fprintf(fdclog,"Write of %02X to Register %d\n",Value, Register);
     // Write 1770 Register - NOT the FDC Control register @ &FE24
     if (Register==0) {
@@ -300,10 +325,10 @@ void Poll1770(int NCycles) {
   if ((Status & 1) && (NMILock==0)) {
     if (FDCommand<6 && *CDiscOpen) {
         int TracksPassed=0; // Holds the number of tracks passed over by the head during seek
-        unsigned char OldTrack=Track;
+        unsigned char OldTrack=(Track >= 80 ? 0 : Track);
         // Seek type commands
         ResetStatus(4); ResetStatus(3);
-        if (FDCommand==1) { fseek(CurrentDisc,DiscStrt[CurrentDrive],SEEK_SET);  Track=0; } // Restore
+        if (FDCommand==1) { fseek(CurrentDisc,DiscStrt[CurrentDrive],SEEK_SET); Track=0; } // Restore
         if (FDCommand==2) { fseek(CurrentDisc,DiscStrt[CurrentDrive]+(DiscStep[CurrentDrive]*Data),SEEK_SET); Track=Data;  } // Seek
         if (FDCommand==4) { HeadDir=1; fseek(CurrentDisc,DiscStep[CurrentDrive],SEEK_CUR); Track++;  } // Step In
         if (FDCommand==5) { HeadDir=0; fseek(CurrentDisc,-DiscStep[CurrentDrive],SEEK_CUR); Track--;  } // Step Out
@@ -317,11 +342,22 @@ void Poll1770(int NCycles) {
         // Add track * (steprate * 1000) to LoadingCycles
         LoadingCycles=(TracksPassed*(CStepRate*1000));
         LoadingCycles+=((EVerify)?VERIFY_TIME:0);
+        if (DiscDriveSoundEnabled) {
+            if (TracksPassed > 1) {
+                PlaySoundSample(SAMPLE_HEAD_SEEK, true);
+                LoadingCycles=TracksPassed*SAMPLE_HEAD_SEEK_CYCLES_PER_TRACK;
+            }
+            else if (TracksPassed == 1) {
+                PlaySoundSample(SAMPLE_HEAD_STEP, false);
+                LoadingCycles = SAMPLE_HEAD_STEP_CYCLES;
+            }
+        }
         return;
     }
     if (FDCommand==15) {
         LoadingCycles-=NCycles;
         if (LoadingCycles<=0) {
+            StopSoundSample(SAMPLE_HEAD_SEEK);
             LoadingCycles=SPIN_DOWN_TIME;
             FDCommand=12;
             NMIStatus|=1<<nmi_floppy;
@@ -397,7 +433,7 @@ void Poll1770(int NCycles) {
         LoadingCycles=45;
         fseek(CurrentDisc,DiscStrt[CurrentDrive]+(DiscStep[CurrentDrive]*Track)+(Sector*SecSize[CurrentDrive]),SEEK_SET);
     }
-    if ((FDCommand>=8) && (*CDiscOpen==0) && (FDCommand<=10)) {
+    if ((FDCommand>=8) && (*CDiscOpen==0) && (FDCommand<=9)) {
         ResetStatus(0);
         SetStatus(4);
         NMIStatus|=1<<nmi_floppy; FDCommand=0;
@@ -563,7 +599,7 @@ void Poll1770(int NCycles) {
         if ((Track==0) && (InvertTR00)) SetStatus(2); else ResetStatus(2);
         if ((Track==0) && (!InvertTR00)) ResetStatus(2); else SetStatus(2);
     }
-    NMIStatus|=1<<nmi_floppy; FDCommand=12; LoadingCycles=4000000; // Spin-down delay
+    NMIStatus|=1<<nmi_floppy; FDCommand=12; LoadingCycles=SPIN_DOWN_TIME; // Spin-down delay
     return;
   }
   if (FDCommand==11) {
@@ -578,7 +614,7 @@ void Poll1770(int NCycles) {
   if (FDCommand==12) { // Spin Down delay
       if (EVerify) LoadingCycles+=SETTLE_TIME;
       LightsOn[CurrentDrive]=TRUE;
-      SpinDown[CurrentDrive]=LoadingCycles;
+      SpinDown[CurrentDrive]=SPIN_DOWN_TIME;
       RotSect=0; FDCommand=0;
       ResetStatus(0);
       return;
@@ -587,7 +623,7 @@ void Poll1770(int NCycles) {
       LoadingCycles-=NCycles;
       if ((LoadingCycles<2000) && (!(Status & 32))) SetStatus(5); // Compelte spin-up, but continuing whirring
       if (LoadingCycles<=0) FDCommand=10; NFDCommand=255; // Go to spin down, but report error.
-      SpinDown[CurrentDrive]=LoadingCycles;
+      SpinDown[CurrentDrive]=SPIN_DOWN_TIME;
       LightsOn[CurrentDrive]=TRUE;
       return;
   }
@@ -684,6 +720,8 @@ void Load1770DiscImage(char *DscFileName,int DscDrive,unsigned char DscType,HMEN
         return;
     }
 
+    strcpy(DscFileNames[DscDrive], DscFileName);
+
 //  if (DscType=0) CurrentHead[DscDrive]=0;
 //  Feb 14th 2001 - Valentines Day - Bah Humbug - ADFS Support added here
     if (DscType==0) {
@@ -779,6 +817,10 @@ void Reset1770(void) {
     CurrentDisc=Disc0;
     CurrentDrive=0;
     CurrentHead[0]=CurrentHead[1]=0;
+    DiscStrt[0]=0;
+    DiscStrt[1]=0;
+    if (Disc0) fseek(Disc0,0,SEEK_SET);
+    if (Disc1) fseek(Disc1,0,SEEK_SET);
     SetMotor(0,FALSE);
     SetMotor(1,FALSE);
     Status=0;
@@ -796,11 +838,13 @@ void Close1770Disc(char Drive) {
         fclose(Disc0);
         Disc0=NULL;
         Disc0Open=0;
+        DscFileNames[0][0] = 0;
     }
     if ((Drive==1) && (Disc1Open)) {
         fclose(Disc1);
         Disc1=NULL;
         Disc1Open=0;
+        DscFileNames[1][0] = 0;
     }
 }
 
@@ -1017,4 +1061,11 @@ void Load1770UEF(FILE *SUEF,int Version)
             mainWin->LoadFDC(FDCDLL, false);
         }
     }
+}
+
+/*--------------------------------------------------------------------------*/
+void Get1770DiscInfo(int DscDrive, int *Type, char *pFileName)
+{
+    *Type = DiscType[DscDrive];
+    strcpy(pFileName, DscFileNames[DscDrive]);
 }

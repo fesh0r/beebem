@@ -1,23 +1,27 @@
-/****************************************************************************/
-/*              Beebem - (c) David Alan Gilbert 1994                        */
-/*              ------------------------------------                        */
-/* This program may be distributed freely within the following restrictions:*/
-/*                                                                          */
-/* 1) You may not charge for this program or for any part of it.            */
-/* 2) This copyright message must be distributed with all copies.           */
-/* 3) This program must be distributed complete with source code.  Binary   */
-/*    only distribution is not permitted.                                   */
-/* 4) The author offers no warrenties, or guarentees etc. - you use it at   */
-/*    your own risk.  If it messes something up or destroys your computer   */
-/*    thats YOUR problem.                                                   */
-/* 5) You may use small sections of code from this program in your own      */
-/*    applications - but you must acknowledge its use.  If you plan to use  */
-/*    large sections then please ask the author.                            */
-/*                                                                          */
-/* If you do not agree with any of the above then please do not use this    */
-/* program.                                                                 */
-/* Please report any problems to the author at beebem@treblig.org           */
-/****************************************************************************/
+/****************************************************************
+BeebEm - BBC Micro and Master 128 Emulator
+Copyright (C) 1994  David Alan Gilbert
+Copyright (C) 1997  Mike Wyatt
+Copyright (C) 2001  Richard Gellman
+Copyright (C) 2004  Ken Lowe
+Copyright (C) 2004  Rob O'Donnell
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public
+License along with this program; if not, write to the Free
+Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+Boston, MA  02110-1301, USA.
+****************************************************************/
+
 /* Beebemulator - memory subsystem - David Alan Gilbert 16/10/94 */
 // Econet emulation: Rob O'Donnell robert@irrelevant.com 28/12/2004
 
@@ -464,6 +468,10 @@ int BeebReadMem(int Address) {
         return(SCSIRead(Address & 0x3));
     }
 
+    if ((Address & ~0x1)==0xfc50) {
+        return(mainWin->PasteKey(Address & 0x1));
+    }
+
     if ((Address & ~0x3)==0xfdf0) {
         return(SASIRead(Address & 0x3));
     }
@@ -478,6 +486,56 @@ int BeebReadMem(int Address) {
 
     return(0xFF);
 } /* BeebReadMem */
+
+void DebugMemoryState()
+{
+    char sram[60];
+    char* psram = sram;
+    int i = 0;
+    int m = 0;
+    sram[0] = 0;
+    DebugDisplayInfo("Memory state:");
+    for(i = 0; i < 16; i++)
+    {
+        if(RomWritable[i])
+        {
+            psram += sprintf(psram,"%d, ",i);
+            m += 16;
+        }
+    }
+    if(strlen(sram) > 0)
+    {
+        sram[strlen(sram)-2] = '\0';
+        DebugDisplayInfoF("%dK sideways RAM using bank %s",m,sram);
+    }
+
+    DebugDisplayInfoF("ROMSEL: %d", ROMSEL);
+    switch(MachineType)
+    {
+        case 0: // BBC B
+            break;
+        case 1: // Integra B
+            DebugDisplayInfoF("Shadow RAM: %s, %s",ShEn == 1 ? "enabled" : "disabled", MemSel == 0 && ShEn == 1 ? "selected" : "not selected");
+            DebugDisplayInfoF("Private areas: %s; 1K %s, 4K %s, 8K %s",PrvEn == 1 ? "enabled" : "disabled", Prvs1 == 1 ? "on" : "off", Prvs4 == 1 ? "on" : "off", Prvs8 == 1 ? "on" : "off");
+            DebugDisplayInfoF("Hidden area address: 0x%01X", HidAdd);
+            break;
+        case 2: // B+
+            DebugDisplayInfoF("Shadow RAM: %s, %s", Sh_Display == 1 ? "enabled" : "disabled", Sh_Display == 1 && ((PrePC>=0xC000 && PrePC<0xE000) || (MemSel==1 && PrePC>=0xA000 && PrePC <0xB000)) ? "selected" : "not selected");
+            DebugDisplayInfoF("Private RAM: %s", MemSel==1 ? "enabled" : "disabled");
+            break;
+        case 3: // Master
+            DebugDisplayInfoF("ACCCON: IRR:%s TST:%s IFJ:%s ITU:%s Y:%s X:%s E:%s D:%s",
+                (intStatus & 0x80) != 0 ? "on" : "off",
+                (ACCCON & 0x40) != 0 ? "on" : "off",
+                (ACCCON & 0x20) != 0 ? "on" : "off",
+                (ACCCON & 0x10) != 0 ? "on" : "off",
+                (ACCCON & 0x08) != 0 ? "on" : "off",
+                (ACCCON & 0x04) != 0 ? "on" : "off",
+                (ACCCON & 0x02) != 0 ? "on" : "off",
+                (ACCCON & 0x01) != 0 ? "on" : "off");
+            break;
+    }
+}
 
 /*----------------------------------------------------------------------------*/
 static void DoRomChange(int NewBank) {
@@ -513,7 +571,7 @@ static void FiddleACCCON(unsigned char newValue) {
     FRAM=ACCCON & 8;
 }
 /*----------------------------------------------------------------------------*/
-void BeebWriteMem(int Address, int Value) {
+void BeebWriteMem(int Address, unsigned char Value) {
     unsigned char oldshd;
 /*  fprintf(stderr,"Write %x to 0x%x\n",Value,Address); */
 
@@ -862,6 +920,49 @@ void BeebWriteMem(int Address, int Value) {
     return;
 }
 
+bool ReadRomInfo(int bank, RomInfo* info)
+{
+    if((RomFlags)Roms[bank][6] == 0)
+        return false;
+    // LanguageAddr and ServiceAddr are really 6502 instructions. Most ROMs obey the JMP convention as
+    // described in the AUG, however BASIC fills the first 6 bytes with CMP 1; BEQ 1F; RTS; NOP
+    // which seems to simply be a check for whether it was entered properly.
+    info->Slot = bank;
+    info->ServiceAddr = info->LanguageAddr = info->RelocationAddr = 0;
+    if(Roms[bank][0] == 0x4C)
+        info->LanguageAddr = (Roms[bank][2] << 8) | Roms[bank][1];
+    if(Roms[bank][3] == 0x4C)
+        info->ServiceAddr = (Roms[bank][5] << 8) | Roms[bank][4];
+    // TODO: Flags0-3 specify instruction type, see master reference manual part 1 p257.
+    info->Flags = (RomFlags)Roms[bank][6];
+    info->VersionStr[0] = '\0';
+    info->Version = Roms[bank][8];
+    strncpy(info->Title, (char*)&Roms[bank][9], 256);
+    if(strlen(info->Title) + 9 != Roms[bank][7])
+        strncpy(info->VersionStr, (char*)&Roms[bank][strlen(info->Title) + 10], 256);
+    strncpy(info->Copyright, (char*)(Roms[bank] + Roms[bank][7] + 1), 256);
+    if(info->Flags & RomRelocate)
+    {
+        int addr = Roms[bank][7] + (int)strlen(info->Copyright) + 2;
+        info->RelocationAddr = (Roms[bank][addr + 3] << 24) | (Roms[bank][addr + 2] << 16) | (Roms[bank][addr + 1] << 8) | Roms[bank][addr];
+    }
+    if(!(info->Flags & RomService))
+    {
+        // BASIC:
+        info->LanguageAddr = 0x8000;
+        info->ServiceAddr = 0;
+    }
+
+    info->WorkspaceAddr = (BeebReadMem(0xDF0 + bank) * 0x100);
+
+    // Some ROMs (e.g. DNFS) use bit 1 of this as an activity flag.
+    // on Master 128 this is apparently not done and the address points into
+    // the FSRAM.
+    if(MachineType < 3)
+        info->WorkspaceAddr &= 0x7FFF;
+    return true;
+}
+
 /*----------------------------------------------------------------------------*/
 // ReadRom was replaced with BeebReadRoms.
 /*----------------------------------------------------------------------------*/
@@ -885,14 +986,13 @@ void BeebReadRoms(void) {
  int romslot = 0xf;
  char RomNameBuf[80];
  char *RomName=RomNameBuf;
+ char *extension;
  unsigned char sc,isrom;
  unsigned char Shortener=1; // Amount to shorten filename by
 
  /* Read all ROM files in the BeebFile directory */
  // This section rewritten for V.1.32 to take account of roms.cfg file.
- strcpy(fullname,RomPath);
- strcat(fullname,RomFile);
- RomCfg=fopen(fullname,"rt");
+ RomCfg=fopen(RomFile,"rt");
  if (RomCfg!=NULL) {
      // CFG file open, proceed to read the roms.
      // if machinetype=1 (i.e. BBC B Integra B) we need to skip 17 lines in the file
@@ -913,9 +1013,18 @@ void BeebReadRoms(void) {
      }
      // for some reason, we have to change \ to /  to make C work...
      for (sc = 0; fullname[sc]; sc++) if (fullname[sc] == '\\') fullname[sc] = '/';
-//   fullname[strlen(fullname)-1]=0;
+     //  fullname[strlen(fullname)-1]=0;
      InFile=fopen(fullname,"rb");
-     if (InFile!=NULL) { fread(WholeRam+0xc000,1,16384,InFile); fclose(InFile); }
+     if (InFile!=NULL)
+     {
+         fread(WholeRam+0xc000,1,16384,InFile);
+         fclose(InFile);
+         // Try to read OS ROM memory map:
+         if((extension = strrchr(fullname, '.')) != NULL)
+             *extension = 0;
+         strncat(fullname, ".map", _MAX_PATH);
+         DebugLoadMemoryMap(fullname, 16);
+     }
      else {
          char errstr[200];
          sprintf(errstr, "Cannot open specified OS ROM:\n %s",fullname);
@@ -923,47 +1032,57 @@ void BeebReadRoms(void) {
      }
      // read paged ROMs
      for (romslot=15;romslot>=0;romslot--) {
-        fgets(RomName,80,RomCfg);
-        if (strchr(RomName, 13)) *strchr(RomName, 13) = 0;
-        if (strchr(RomName, 10)) *strchr(RomName, 10) = 0;
-        strcpy(fullname,RomName);
-        if ((RomName[0]!='\\') && (RomName[1]!=':')) {
-            strcpy(fullname,RomPath);
-            strcat(fullname,"BeebFile/");
-            strcat(fullname,RomName);
-        }
-        isrom=1; RomWritable[romslot]=0; Shortener=0;
-        while ((RomName[strlen(RomName)-1] == '\r') || (RomName[strlen(RomName)-1] == '\n'))
-        {
-            RomName[strlen(RomName)-1] = 0;
-        }
-        if (strncmp(RomName,"EMPTY",5)==0)  { RomWritable[romslot]=0; isrom=0; }
-        if (strncmp(RomName,"RAM",3)==0) { RomWritable[romslot]=1; isrom=0; }
-        if (strncmp(RomName+(strlen(RomName)-4),":RAM",4)==0) {
-            // Writable ROM (don't ask, Mark De Weger should be happy now ;) Hi Mark! )
-            RomWritable[romslot]=1; // Make it writable
-            isrom=1; // Make it a ROM still
-            Shortener=4; // Shorten filename
-        }
-        for (sc = 0; fullname[sc]; sc++) if (fullname[sc] == '\\') fullname[sc] = '/';
-        fullname[strlen(fullname)-Shortener]=0;
-        InFile=fopen(fullname,"rb");
-        if  (InFile!=NULL) { fread(Roms[romslot],1,16384,InFile); fclose(InFile); }
-        else {
-            if (isrom==1) {
-                char errstr[200];
-                sprintf(errstr, "Cannot open specified ROM:\n %s",fullname);
-                MessageBox(GETHWND,errstr,WindowTitle,MB_OK|MB_ICONERROR);
-            }
-        }
+         fgets(RomName,80,RomCfg);
+         if (strchr(RomName, 13)) *strchr(RomName, 13) = 0;
+         if (strchr(RomName, 10)) *strchr(RomName, 10) = 0;
+         strcpy(fullname,RomName);
+         if ((RomName[0]!='\\') && (RomName[1]!=':')) {
+             strcpy(fullname,RomPath);
+             strcat(fullname,"BeebFile/");
+             strcat(fullname,RomName);
+         }
+         isrom=1; RomWritable[romslot]=0; Shortener=0;
+         while ((RomName[strlen(RomName)-1] == '\r') || (RomName[strlen(RomName)-1] == '\n'))
+         {
+             RomName[strlen(RomName)-1] = 0;
+         }
+         if (strncmp(RomName,"EMPTY",5)==0)  { RomWritable[romslot]=0; isrom=0; }
+         if (strncmp(RomName,"RAM",3)==0) { RomWritable[romslot]=1; isrom=0; }
+         if (strncmp(RomName+(strlen(RomName)-4),":RAM",4)==0) {
+             // Writable ROM (don't ask, Mark De Weger should be happy now ;) Hi Mark! )
+             RomWritable[romslot]=1; // Make it writable
+             isrom=1; // Make it a ROM still
+             Shortener=4; // Shorten filename
+         }
+         for (sc = 0; fullname[sc]; sc++) if (fullname[sc] == '\\') fullname[sc] = '/';
+         fullname[strlen(fullname)-Shortener]=0;
+         InFile=fopen(fullname,"rb");
+         if (InFile!=NULL)
+         {
+             // Read ROM:
+             fread(Roms[romslot],1,16384,InFile);
+             fclose(InFile);
+             // Try to read ROM memory map:
+             if((extension = strrchr(fullname, '.')) != NULL)
+                 *extension = 0;
+             strncat(fullname, ".map", _MAX_PATH);
+             DebugLoadMemoryMap(fullname, romslot);
+         }
+         else {
+             if (isrom==1) {
+                 char errstr[200];
+                 sprintf(errstr, "Cannot open specified ROM:\n %s",fullname);
+                 MessageBox(GETHWND,errstr,WindowTitle,MB_OK|MB_ICONERROR);
+             }
+         }
      }
      fclose(RomCfg);
  }
  else {
-    char errstr[200];
-    sprintf(errstr, "Cannot open ROM Configuration file:\n  %s", fullname);
-    MessageBox(GETHWND,errstr,WindowTitle,MB_OK|MB_ICONERROR);
-    exit(1);
+     char errstr[200];
+     sprintf(errstr, "Cannot open ROM Configuration file:\n  %s", fullname);
+     MessageBox(GETHWND,errstr,WindowTitle,MB_OK|MB_ICONERROR);
+     exit(1);
  }
 }
 /*----------------------------------------------------------------------------*/
@@ -995,6 +1114,7 @@ void BeebMemInit(unsigned char LoadRoms,unsigned char SkipIntegraBConfig) {
       for (CMA3=0;CMA3<16;CMA3++) RomWritable[CMA3]=1;
       for (RomBlankingSlot=0xf;RomBlankingSlot<0x10;RomBlankingSlot--) memset(Roms[RomBlankingSlot],0,0x4000);
       // This shouldn't be required for sideways RAM.
+      DebugInitMemoryMaps();
       BeebReadRoms(); // Only load roms on start
   }
 

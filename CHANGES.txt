@@ -1,6 +1,117 @@
 BeebEm Change History
 =====================
 
+Version 4.11 (Rob O'Donnell, Rich Talbot-Watkins, Mike Wyatt)
+------------
+* Added AUN Econet support.
+* Added 'RAW comms' option for use with the serial port IP options.
+* Updated video emulation to remove screen stretching and fix cursor
+  positioning.
+* Added some more shortcut keys, for use on laptops primarily:
+    ALT 1  Quick save state
+    ALT 2  Quick load state
+    ALT 5  Capture screen to file
+    ALT +  Increase emulation speed
+    ALT -  Decrease emulation speed
+* Added support for the Master 128 numeric keypad.
+* Added option to enable/disable floppy drive controller.
+* Added option to enable/disable the real time clock Y2K 20 year adjustment.
+* Fixed bug in M128 BIT instruction (thanks to Michael Firth).  Fixes some
+  issues when using MOS3.5 (e.g. *CONFIGURE).
+* Fixed issue with file lengths in disc import option.
+
+Version 4.10 (Mike Wyatt)
+------------
+* Added screen capture options to the file menu.  Resolution and file format
+  can be selected.  The BMP, JPEG, GIF and PNG file formats are supported.
+  ALT+keypad 5 (with NumLock on) is a shortcut key for capturing the screen
+  to file.
+* Added option to change the User Data folder location.
+* Added keyboard mapping to the saved emulator state.
+* Fixed issue with file offsets after break key press in 1770 controller.
+* Fixed issue with disc write protection when changing Beeb model.
+* Fixed sound muting while Window is being moved.
+* Changed source code licensing to the GNU General Public License.
+* Removed the Master 512 Co-Processor and TMS5220 Speech Generator emulation
+  as the source code licensing for these features is not compatible with the
+  GPL.  These two features are still available in BeebEm version 4.03, which
+  is on the BeebEm website.
+
+Version 4.02 (Mike Wyatt)
+------------
+* Added disc drive sound emulation.
+* Added write support for the Master real time clock.
+* Fixed teletext mode smoothing at startup in Vista.
+
+Version 4.01 (Steve Pick, Mike Wyatt)
+------------
+* Rewrote debugger command interpreter:
+  - Supports command names longer than one character
+  - Added command history (up/down arrows when command box focused)
+  - Commands are now implemented using function pointers, should be more
+    expandable.
+  - More descriptive help - type 'help', 'help <command>' or 'help <addr>'.
+  - Better label support - any word in command arguments preceded with a '.'
+    is interpreted as a label and resolved before the args are passed to
+    the command handler.
+* Fixed bug that prevented checkboxes enabled/disabled by command from
+  actually taking effect.
+* Expanded debug memory map support:
+  - Maps can now be stored for each ROM, just put a .map file with the same
+    name as the ROM in the ROM's directory, for example BeebFile\BBC\os12.map
+    corresponds to BeebFile\BBC\OS12.ROM, and address queries (via
+    'help <addr>') will return info from the currently selected ROM's map.
+  - Address info queries now understand shadow/private/sideways RAM in
+    different machines.
+  - Cleaned up MemoryMap.txt and moved it to BeebFile\BBC\OS12.map
+* Added 'state m' command to get state of memory (ACCCON and Shadow/Sideways
+  RAM info)
+* Added routines for extracting header info from paged ROMs, and 'state r'
+  command to dump this info in the debugger.
+* Break now shows previous Program Counter address as well as the current
+  address. This is useful for finding where the source of a jump was.
+* A bit of a hack to allow debug window to go behind main window, but also
+  come to foreground with main window.
+* Added option to enable DirectX smoothing when only in teletext mode.
+
+Version 4.0 (Mike Wyatt, Rob O'Donnell, Steve Pick)
+-----------
+* Added clipboard functionality from the Mac port.  Clipboard can be set as
+  destination for printer output, copy and paste menu options for BASIC
+  programs.
+* Added file import/export for DFS disc images loaded into BeebEm.  The
+  exported files use the standard archive format where .INF files store the
+  file attributes.
+* Added support for disc, state and tape file specific preferences.  When
+  loading a file from the command line, running a disk image or loading a
+  state file BeebEm will check for Preferences.cfg and Roms.cfg files in the
+  same folder as the image file.  This makes it easier to set up different
+  preferences for different programs.
+* Added ALT-ENTER keypress to toggle fullscreen mode.
+* Creation of registry entries at installation:
+    HKEY_LOCAL_MACHINE\SOFTWARE\BeebEm\InstallPath
+    HKEY_LOCAL_MACHINE\SOFTWARE\BeebEm\Version
+* Reduced the tape control window size so it fits on a Netbook screen.
+* Added Rob's IP options for serial port emulation.  Allows connection via
+  TCP/IP to local or remote IP address.  Incoming connections can be
+  supported via utilities such as tcpser.
+* Debugger enhancements from Steve:
+  - User-defined breakpoints and watches.
+  - Break on BRK instruction.
+  - Support for loading VICE format label files, as generated by LD65 - this
+    lets you use text labels in place of addresses in all debugger commands.
+  - Memory map file allows short descriptions for memory ranges. Debugger
+    will use this to describe what location it's entered OS code at, or
+    where the break landed.
+  - Commands to toggle various UI checkboxes.
+  - Command to echo a line of text to debugger output.
+  - Debugger commands can now be loaded from a script file specified on the
+    BeebEm command line (with -DebugScript). Simple comments are also
+    supported.
+  - Sanitized some code, added DisplayDebugInfoF(format, ...) to output
+    formatted debugging info, sprintf() style.
+  - Beautified the debugging UI a bit.
+
 Version 3.85 (Mike Wyatt)
 ------------
 * Fixed disc formatting using the 8271 controller.

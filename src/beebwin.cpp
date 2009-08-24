@@ -1,22 +1,29 @@
-/****************************************************************************/
-/*                               Beebem                                     */
-/*                               ------                                     */
-/* This program may be distributed freely within the following restrictions:*/
-/*                                                                          */
-/* 1) You may not charge for this program or for any part of it.            */
-/* 2) This copyright message must be distributed with all copies.           */
-/* 3) This program must be distributed complete with source code.  Binary   */
-/*    only distribution is not permitted.                                   */
-/* 4) The author offers no warrenties, or guarentees etc. - you use it at   */
-/*    your own risk.  If it messes something up or destroys your computer   */
-/*    thats YOUR problem.                                                   */
-/* 5) You may use small sections of code from this program in your own      */
-/*    applications - but you must acknowledge its use.  If you plan to use  */
-/*    large sections then please ask the author.                            */
-/*                                                                          */
-/* If you do not agree with any of the above then please do not use this    */
-/* program.                                                                 */
-/****************************************************************************/
+/****************************************************************
+BeebEm - BBC Micro and Master 128 Emulator
+Copyright (C) 1994  Nigel Magnay
+Copyright (C) 1997  Mike Wyatt
+Copyright (C) 1998  Robert Schmidt
+Copyright (C) 2001  Richard Gellman
+Copyright (C) 2004  Ken Lowe
+Copyright (C) 2004  Rob O'Donnell
+Copyright (C) 2005  Jon Welch
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public
+License along with this program; if not, write to the Free
+Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+Boston, MA  02110-1301, USA.
+****************************************************************/
+
 /* Mike Wyatt and NRM's port to win32 - 7/6/97 */
 /* Conveted to use DirectX - Mike Wyatt 11/1/98 */
 // Econet added Rob O'Donnell. robert@irrelevant.com. 28/12/2004.
@@ -25,11 +32,12 @@
 #include <windows.h>
 #include <initguid.h>
 #include <shlobj.h>
+#include <shlwapi.h>
+#include <gdiplus.h>
 #include "main.h"
 #include "beebwin.h"
 #include "port.h"
 #include "6502core.h"
-#include "cRegistry.h"
 #include "disc8271.h"
 #include "disc1770.h"
 #include "sysvia.h"
@@ -51,20 +59,26 @@
 #include "z80mem.h"
 #include "z80.h"
 #include "userkybd.h"
+#ifdef SPEECH_ENABLED
 #include "speech.h"
+#endif
 #include "teletext.h"
 #include "avi.h"
 #include "csw.h"
 #include "serialdevices.h"
 #include "Arm.h"
+#include "version.h"
+
+using namespace Gdiplus;
 
 // some LED based macros
 #define LED_COL_BASE 64
 
-// Registry access
-extern cRegistry SysReg;
+static char *CFG_REG_KEY = "Software\\BeebEm";
 
+#ifdef M512COPRO_ENABLED
 void i86_main(void);
+#endif
 
 FILE *CMDF2;
 unsigned char CMA2;
@@ -92,9 +106,12 @@ const char *WindowTitle = "BeebEm - BBC Model B / Master 128 Emulator";
 static const char *AboutText =
     "BeebEm - Emulating:\n\nBBC Micro Model B\nBBC Micro Model B + IntegraB\n"
     "BBC Micro Model B Plus (128)\nAcorn Master 128\nAcorn 65C02 Second Processor\n"
-    "Torch Z80 Second Processor\nMaster 512 Second Processor\nAcorn Z80 Second Processor\n"
+    "Torch Z80 Second Processor\nAcorn Z80 Second Processor\n"
+#ifdef M512COPRO_ENABLED
+    "Master 512 Second Processor\n"
+#endif
     "ARM Second Processor\n\n"
-    "Version 3.85, September 2008";
+    "Version " VERSION_STRING ", Aug 2009";
 
 /* Prototypes */
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
@@ -132,7 +149,7 @@ BeebWin::BeebWin()
     memset(&defaultMapping, 0, sizeof(KeyMap));
     memset(&logicalMapping, 0, sizeof(KeyMap));
     memset(&UserKeymap, 0, sizeof(KeyMap));
-    m_UserKeyMapPath[0] = 0;
+    memset(m_UserKeyMapPath, 0, sizeof(m_UserKeyMapPath));
     m_hBitmap = m_hOldObj = m_hDCBitmap = NULL;
     m_screen = m_screen_blur = NULL;
     m_ScreenRefreshCount = 0;
@@ -141,6 +158,7 @@ BeebWin::BeebWin()
     strcpy(m_szTitle, WindowTitle);
     m_AviDC = NULL;
     m_AviDIB = NULL;
+    m_CaptureBitmapPending = false;
     m_SpVoice = NULL;
     m_hTextView = NULL;
     m_frozen = FALSE;
@@ -156,11 +174,19 @@ BeebWin::BeebWin()
     m_AutoSavePrefsAll = false;
     m_AutoSavePrefsChanged = false;
     memset(m_KbdCmd, 0, sizeof(m_KbdCmd));
+    memset(m_DebugScript, 0, sizeof(m_DebugScript));
     m_KbdCmdPos = -1;
     m_KbdCmdPress = false;
     m_KbdCmdDelay = 40;
     m_KbdCmdLastCycles = 0;
     m_NoAutoBoot = false;
+    m_clipboardlen = 0;
+    m_clipboardptr = 0;
+    m_printerbufferlen = 0;
+    m_translateCRLF = true;
+    m_CurrentDisplayRenderer = 0;
+    m_DXSmoothing = true;
+    m_DXSmoothMode7Only = false;
 
     /* Get the applications path - used for non-user files */
     char app_path[_MAX_PATH];
@@ -170,16 +196,15 @@ BeebWin::BeebWin()
     _splitpath(app_path, app_drive, app_dir, NULL, NULL);
     _makepath(m_AppPath, app_drive, app_dir, NULL, NULL);
 
-    // Default user data path to a sub-directory in My Docs
-    if (SHGetFolderPath(NULL, CSIDL_PERSONAL, NULL, SHGFP_TYPE_CURRENT, m_UserDataPath) == NOERROR)
+    // Read user data path from reg
+    if (!RegGetStringValue(HKEY_CURRENT_USER, CFG_REG_KEY, "UserDataFolder",
+                           m_UserDataPath, _MAX_PATH))
     {
-        strcat(m_UserDataPath, "\\BeebEm\\");
-    }
-    else
-    {
-        // Default to user data dir installed with BeebEm
-        strcpy(m_UserDataPath, m_AppPath);
-        strcat(m_UserDataPath, "UserData\\");
+        // Default user data path to a sub-directory in My Docs
+        if (SHGetFolderPath(NULL, CSIDL_PERSONAL, NULL, SHGFP_TYPE_CURRENT, m_UserDataPath) == NOERROR)
+        {
+            strcat(m_UserDataPath, "\\BeebEm\\");
+        }
     }
 
     // Set default files, may be overridden by command line parameters.
@@ -192,11 +217,47 @@ void BeebWin::Initialise()
 {
     // Parse command line
     ParseCommandLine();
+    FindCommandLineFile();
+    CheckForLocalPrefs(m_CommandLineFileName, false);
 
     // Check that user data directory exists
     if (CheckUserDataPath() == false)
         exit(-1);
 
+    LoadPreferences();
+
+    if (FAILED(CoInitialize(NULL)))
+        MessageBox(m_hWnd,"Failed to initialise COM\n",WindowTitle,MB_OK|MB_ICONERROR);
+
+    GdiplusStartupInput gdiplusStartupInput;
+    GdiplusStartup(&m_gdiplusToken, &gdiplusStartupInput, NULL);
+
+    InitClass();
+    CreateBeebWindow();
+    CreateBitmap();
+
+    m_hMenu = GetMenu(m_hWnd);
+    m_hDC = GetDC(m_hWnd);
+
+    ApplyPrefs();
+
+    if(strcmp(m_DebugScript,"\0") != 0)
+    {
+        DebugOpenDialog(hInst, m_hWnd);
+        DebugRunScript(m_DebugScript);
+    }
+
+    // Boot file if passed on command line
+    HandleCommandLineFile();
+
+    // Schedule first key press if keyboard command supplied
+    if (m_KbdCmd[0] != 0)
+        SetTimer(m_hWnd, 1, 1000, NULL);
+}
+
+/****************************************************************************/
+void BeebWin::ApplyPrefs()
+{
     // Set up paths
     strcpy(EconetCfgPath, m_UserDataPath);
     strcpy(RomPath, m_UserDataPath);
@@ -210,23 +271,10 @@ void BeebWin::Initialise()
     GetDataPath(m_UserDataPath, keymap);
     ReadKeyMap(keymap, &defaultMapping);
 
-    LoadPreferences();
-    TouchScreenOpen();
-
-    if (FAILED(CoInitialize(NULL)))
-        MessageBox(m_hWnd,"Failed to initialise COM\n",WindowTitle,MB_OK|MB_ICONERROR);
-
-    InitClass();
-    CreateBeebWindow();
-    CreateBitmap();
-
-    m_hMenu = GetMenu(m_hWnd);
     InitMenu();
-    m_hDC = GetDC(m_hWnd);
-
-    // Will hide menu if necessary
     ShowMenu(TRUE);
 
+    ExitDX();
     if (m_DisplayRenderer != IDM_DISPGDI)
         InitDX();
 
@@ -243,28 +291,46 @@ void BeebWin::Initialise()
     if (m_MenuIdSticks == IDM_JOYSTICK)
         InitJoystick();
 
-    UpdateModelType();
-    UpdateSFXMenu();
-    UpdateLEDMenu(m_hMenu);
-    MenuOn=TRUE;
     LoadFDC(NULL, true);
-    SetTapeSpeedMenu();
-    UpdateOptiMenu();
+    RTCInit();
 
     SoundReset();
     if (SoundDefault) SoundInit();
     SetSoundMenu();
+#ifdef SPEECH_ENABLED
     if (SpeechDefault)
         tms5220_start();
+#endif
+
+    // Serial init
+    if (IP232custom)
+    {
+        strcpy(IPAddress,IP232customip);
+        PortNo = IP232customport;
+    }
+    else
+    {
+        strcpy(IPAddress,"127.0.0.1");
+        PortNo = 25232;
+    }
+    if (SerialPortEnabled) {
+        if (TouchScreenEnabled)
+            TouchScreenOpen();
+
+        if (EthernetPortEnabled && (IP232localhost || IP232custom))
+        {
+            if (IP232Open() == false)
+            {
+                MessageBox(GETHWND,"Serial IP232 could not connect to specified address",
+                           WindowTitle,MB_OK|MB_ICONERROR);
+                bSerialStateChanged=TRUE;
+                SerialPortEnabled=FALSE;
+                UpdateSerialMenu(m_hMenu);
+            }
+        }
+    }
 
     ResetBeebSystem(MachineType,TubeEnabled,1);
-
-    // Boot file if passed on command line
-    HandleCommandLineFile();
-
-    // Schedule first key press if keyboard command supplied
-    if (m_KbdCmd[0] != 0)
-        SetTimer(m_hWnd, 1, 1000, NULL);
 }
 
 /****************************************************************************/
@@ -281,6 +347,8 @@ BeebWin::~BeebWin()
         DeleteObject(m_hBitmap);
     if (m_hDCBitmap != NULL)
         DeleteDC(m_hDCBitmap);
+
+    GdiplusShutdown(m_gdiplusToken);
 
     CoUninitialize();
 }
@@ -303,20 +371,30 @@ void BeebWin::Shutdown()
         m_SpVoice->Release();
         m_SpVoice = NULL;
     }
+
+    if (mEthernetHandle > 0)
+    {
+        IP232Close();
+        mEthernetHandle = 0;
+    }
 }
 
 /****************************************************************************/
 void BeebWin::ResetBeebSystem(unsigned char NewModelType,unsigned char TubeStatus,unsigned char LoadRoms)
 {
     SwitchOnCycles=0; // Reset delay
-    SoundChipReset();
+    SoundReset();
+    if (SoundDefault)
+        SoundInit();
     SwitchOnSound();
     EnableTube=TubeStatus;
     MachineType=NewModelType;
     BeebMemInit(LoadRoms,m_ShiftBooted);
     Init6502core();
     if (EnableTube) Init65C02core();
+#ifdef M512COPRO_ENABLED
     if (Tube186Enabled) i86_main();
+#endif
     Enable_Z80 = 0;
     if (TorchTube || AcornZ80)
     {
@@ -338,6 +416,7 @@ void BeebWin::ResetBeebSystem(unsigned char NewModelType,unsigned char TubeStatu
     SysVIAReset();
     UserVIAReset();
     VideoInit();
+    SetDiscWriteProtects();
     Disc8271_reset();
     if (EconetEnabled) EconetReset();   //Rob:
     Reset1770();
@@ -368,6 +447,7 @@ void BeebWin::ResetBeebSystem(unsigned char NewModelType,unsigned char TubeStatu
         if (DiscLoaded[1]) Load1770DiscImage(CDiscName[1],1,CDiscType[1],m_hMenu);
     }
 }
+
 /****************************************************************************/
 void BeebWin::CreateBitmap()
 {
@@ -559,85 +639,211 @@ void BeebWin::InitMenu(void)
     char menu_string[256];
     HMENU hMenu = m_hMenu;
 
+    // File -> Video Options
+    CheckMenuItem(hMenu, IDM_VIDEORES1, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_VIDEORES2, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_VIDEORES3, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_VIDEOSKIP0, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_VIDEOSKIP1, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_VIDEOSKIP2, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_VIDEOSKIP3, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_VIDEOSKIP4, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_VIDEOSKIP5, MF_UNCHECKED);
     CheckMenuItem(hMenu, m_MenuIdAviResolution, MF_CHECKED);
     CheckMenuItem(hMenu, m_MenuIdAviSkip, MF_CHECKED);
-    CheckMenuItem(hMenu, IDM_SPEEDANDFPS, m_ShowSpeedAndFPS ? MF_CHECKED : MF_UNCHECKED);
-    CheckMenuItem(hMenu, m_MenuIdWinSize, MF_CHECKED);
-    CheckMenuItem(hMenu, IDM_FULLSCREEN, m_isFullScreen ? MF_CHECKED : MF_UNCHECKED);
-    CheckMenuItem(hMenu, m_MenuIdSampleRate, MF_CHECKED);
-    CheckMenuItem(hMenu, m_MenuIdVolume, MF_CHECKED);
-    CheckMenuItem(hMenu, m_MenuIdTiming, MF_CHECKED);
-    if (m_MenuIdSticks != 0)
-        CheckMenuItem(hMenu, m_MenuIdSticks, MF_CHECKED);
-    CheckMenuItem(hMenu, IDM_FREEZEINACTIVE, m_FreezeWhenInactive ? MF_CHECKED : MF_UNCHECKED);
-    CheckMenuItem(hMenu, IDM_HIDECURSOR, m_HideCursor ? MF_CHECKED : MF_UNCHECKED);
-    CheckMenuItem(hMenu, IDM_IGNOREILLEGALOPS,
-                    IgnoreIllegalInstructions ? MF_CHECKED : MF_UNCHECKED);
-    CheckMenuItem(hMenu, m_MenuIdKeyMapping, MF_CHECKED);
-    CheckMenuItem(hMenu, IDM_MAPAS, m_KeyMapAS ? MF_CHECKED : MF_UNCHECKED);
-    CheckMenuItem(hMenu, IDM_MAPFUNCS, m_KeyMapFunc ? MF_CHECKED : MF_UNCHECKED);
+
+    // File -> Disc Options
     CheckMenuItem(hMenu, IDM_WPDISC0, m_WriteProtectDisc[0] ? MF_CHECKED : MF_UNCHECKED);
     CheckMenuItem(hMenu, IDM_WPDISC1, m_WriteProtectDisc[1] ? MF_CHECKED : MF_UNCHECKED);
     CheckMenuItem(hMenu, IDM_WPONLOAD, m_WriteProtectOnLoad ? MF_CHECKED : MF_UNCHECKED);
-    CheckMenuItem(hMenu, IDM_AMXONOFF, AMXMouseEnabled ? MF_CHECKED : MF_UNCHECKED);
-    CheckMenuItem(hMenu, IDM_AMX_LRFORMIDDLE, AMXLRForMiddle ? MF_CHECKED : MF_UNCHECKED);
-    CheckMenuItem(hMenu, m_MenuIdAMXSize, MF_CHECKED);
-    if (m_MenuIdAMXAdjust != 0)
-        CheckMenuItem(hMenu, m_MenuIdAMXAdjust, MF_CHECKED);
+
+    // File -> Capture Options
+    CheckMenuItem(hMenu, IDM_CAPTURERES1, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_CAPTURERES2, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_CAPTURERES3, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_CAPTUREBMP, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_CAPTUREJPEG, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_CAPTUREGIF, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_CAPTUREPNG, MF_UNCHECKED);
+    CheckMenuItem(hMenu, m_MenuIdCaptureResolution, MF_CHECKED);
+    CheckMenuItem(hMenu, m_MenuIdCaptureFormat, MF_CHECKED);
+
+    // Edit
+    CheckMenuItem(hMenu, IDM_EDIT_CRLF, m_translateCRLF ? MF_CHECKED : MF_UNCHECKED);
+
+    // Comms -> Tape Speed
+    SetTapeSpeedMenu();
+
+    // Comms
+    CheckMenuItem(m_hMenu,ID_UNLOCKTAPE,(UnlockTape)?MF_CHECKED:MF_UNCHECKED);
     CheckMenuItem(hMenu, IDM_PRINTERONOFF, PrinterEnabled ? MF_CHECKED : MF_UNCHECKED);
+
+    // Comms -> Printer
+    CheckMenuItem(hMenu, IDM_PRINTER_FILE, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_PRINTER_LPT1, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_PRINTER_LPT2, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_PRINTER_LPT3, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_PRINTER_LPT4, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_PRINTER_COM1, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_PRINTER_COM2, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_PRINTER_COM3, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_PRINTER_COM4, MF_UNCHECKED);
+    CheckMenuItem(hMenu, m_MenuIdPrinterPort, MF_CHECKED);
     strcpy(menu_string, "File: ");
     strcat(menu_string, m_PrinterFileName);
     ModifyMenu(hMenu, IDM_PRINTER_FILE, MF_BYCOMMAND, IDM_PRINTER_FILE, menu_string);
-    CheckMenuItem(hMenu, m_MenuIdPrinterPort, MF_CHECKED);
 
-    UpdateDisplayRendererMenu();
-    CheckMenuItem(hMenu, IDM_DXSMOOTHING, m_DXSmoothing ? MF_CHECKED : MF_UNCHECKED);
-    CheckMenuItem(hMenu, m_DDFullScreenMode, MF_CHECKED);
-    CheckMenuItem(hMenu, IDM_TEXTVIEW, m_TextViewEnabled ? MF_CHECKED:MF_UNCHECKED);
-
+    // Comms -> RS423
     CheckMenuItem(hMenu, ID_SERIAL, SerialPortEnabled ? MF_CHECKED:MF_UNCHECKED);
-    CheckMenuItem(hMenu, ID_TOUCHSCREEN, TouchScreenEnabled ? MF_CHECKED:MF_UNCHECKED);
-
     CheckMenuItem(hMenu, ID_COM1, (SerialPort==1)? MF_CHECKED:MF_UNCHECKED);
     CheckMenuItem(hMenu, ID_COM2, (SerialPort==2)? MF_CHECKED:MF_UNCHECKED);
     CheckMenuItem(hMenu, ID_COM3, (SerialPort==3)? MF_CHECKED:MF_UNCHECKED);
     CheckMenuItem(hMenu, ID_COM4, (SerialPort==4)? MF_CHECKED:MF_UNCHECKED);
+    CheckMenuItem(hMenu, ID_TOUCHSCREEN, TouchScreenEnabled ? MF_CHECKED:MF_UNCHECKED);
+//  CheckMenuItem(hMenu, ID_IP232, EthernetPortEnabled ? MF_CHECKED:MF_UNCHECKED);
+    CheckMenuItem(hMenu, ID_IP232LOCALHOST, IP232localhost ? MF_CHECKED:MF_UNCHECKED);
+    CheckMenuItem(hMenu, ID_IP232CUSTOM, IP232custom ? MF_CHECKED:MF_UNCHECKED);
+    CheckMenuItem(hMenu, ID_IP232MODE, IP232mode ? MF_CHECKED:MF_UNCHECKED);
+    CheckMenuItem(hMenu, ID_IP232RAW, IP232raw ? MF_CHECKED:MF_UNCHECKED);
 
+    // View
+    UpdateDisplayRendererMenu();
+    CheckMenuItem(hMenu, IDM_DXSMOOTHING, m_DXSmoothing ? MF_CHECKED : MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_DXSMOOTHMODE7ONLY, m_DXSmoothMode7Only ? MF_CHECKED : MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_SPEEDANDFPS, m_ShowSpeedAndFPS ? MF_CHECKED : MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_FULLSCREEN, m_isFullScreen ? MF_CHECKED : MF_UNCHECKED);
+    UpdateMonitorMenu();
     CheckMenuItem(hMenu, ID_HIDEMENU, HideMenuEnabled ? MF_CHECKED:MF_UNCHECKED);
+    UpdateLEDMenu(hMenu);
+    CheckMenuItem(hMenu, IDM_TEXTVIEW, m_TextViewEnabled ? MF_CHECKED:MF_UNCHECKED);
 
-    CheckMenuItem(m_hMenu,ID_TAPESOUND,(TapeSoundEnabled)?MF_CHECKED:MF_UNCHECKED);
+    // View -> Win size
+    CheckMenuItem(hMenu, IDM_320X256, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_640X512, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_800X600, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_1024X768, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_1024X512, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_1280X1024, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_1440X1080, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_1600X1200, MF_UNCHECKED);
+    CheckMenuItem(hMenu, m_MenuIdWinSize, MF_CHECKED);
+
+    // View -> DD mode
+    CheckMenuItem(hMenu, ID_VIEW_DD_640X480, MF_UNCHECKED);
+    CheckMenuItem(hMenu, ID_VIEW_DD_1024X768, MF_UNCHECKED);
+    CheckMenuItem(hMenu, ID_VIEW_DD_1280X1024, MF_UNCHECKED);
+    CheckMenuItem(hMenu, ID_VIEW_DD_1280X768, MF_UNCHECKED);
+    CheckMenuItem(hMenu, ID_VIEW_DD_1280X960, MF_UNCHECKED);
+    CheckMenuItem(hMenu, ID_VIEW_DD_1440X900, MF_UNCHECKED);
+    CheckMenuItem(hMenu, ID_VIEW_DD_1600X1200, MF_UNCHECKED);
+    CheckMenuItem(hMenu, m_DDFullScreenMode, MF_CHECKED);
+
+    // View -> Motion blur
+    CheckMenuItem(hMenu, IDM_BLUR_OFF, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_BLUR_2, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_BLUR_4, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_BLUR_8, MF_UNCHECKED);
+    CheckMenuItem(hMenu, m_MotionBlur, MF_CHECKED);
+
+    // Speed
+    CheckMenuItem(hMenu, IDM_REALTIME, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_FIXEDSPEED100, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_FIXEDSPEED50, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_FIXEDSPEED10, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_FIXEDSPEED5, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_FIXEDSPEED2, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_FIXEDSPEED1_5, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_FIXEDSPEED1_25, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_FIXEDSPEED1_1, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_FIXEDSPEED0_9, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_FIXEDSPEED0_5, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_FIXEDSPEED0_75, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_FIXEDSPEED0_25, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_FIXEDSPEED0_1, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_50FPS, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_25FPS, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_10FPS, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_5FPS, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_1FPS, MF_UNCHECKED);
+    CheckMenuItem(hMenu, m_MenuIdTiming, MF_CHECKED);
+
+    // Sound
+    SetSoundMenu();
+#ifdef SPEECH_ENABLED
+    CheckMenuItem(hMenu, IDM_SPEECH, SpeechDefault ? MF_CHECKED:MF_UNCHECKED);
+#endif
     CheckMenuItem(m_hMenu,IDM_SOUNDCHIP,(SoundChipEnabled)?MF_CHECKED:MF_UNCHECKED);
+    UpdateSFXMenu();
+    CheckMenuItem(m_hMenu,ID_TAPESOUND,(TapeSoundEnabled)?MF_CHECKED:MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_44100KHZ, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_22050KHZ, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_11025KHZ, MF_UNCHECKED);
+    CheckMenuItem(hMenu, m_MenuIdSampleRate, MF_CHECKED);
+    CheckMenuItem(hMenu, IDM_HIGHVOLUME, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_MEDIUMVOLUME, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_LOWVOLUME, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_FULLVOLUME, MF_UNCHECKED);
+    CheckMenuItem(hMenu, m_MenuIdVolume, MF_CHECKED);
+    SetPBuff();
     CheckMenuItem(m_hMenu,ID_PSAMPLES,(PartSamples)?MF_CHECKED:MF_UNCHECKED);
     CheckMenuItem(m_hMenu, IDM_EXPVOLUME, SoundExponentialVolume ? MF_CHECKED:MF_UNCHECKED);
     CheckMenuItem(hMenu, IDM_TEXTTOSPEECH, m_TextToSpeechEnabled ? MF_CHECKED:MF_UNCHECKED);
 
+    // AMX
+    CheckMenuItem(hMenu, IDM_AMXONOFF, AMXMouseEnabled ? MF_CHECKED : MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_AMX_LRFORMIDDLE, AMXLRForMiddle ? MF_CHECKED : MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_AMX_320X256, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_AMX_640X256, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_AMX_160X256, MF_UNCHECKED);
+    CheckMenuItem(hMenu, m_MenuIdAMXSize, MF_CHECKED);
+    CheckMenuItem(hMenu, IDM_AMX_ADJUSTP50, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_AMX_ADJUSTP30, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_AMX_ADJUSTP10, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_AMX_ADJUSTM10, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_AMX_ADJUSTM30, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_AMX_ADJUSTM50, MF_UNCHECKED);
+    if (m_MenuIdAMXAdjust != 0)
+        CheckMenuItem(hMenu, m_MenuIdAMXAdjust, MF_CHECKED);
+
+    // Hardware -> Model
+    UpdateModelType();
+
+    // Hardware
     CheckMenuItem(m_hMenu, IDM_TUBE, (TubeEnabled)?MF_CHECKED:MF_UNCHECKED);
+#ifdef M512COPRO_ENABLED
     CheckMenuItem(m_hMenu, IDM_TUBE186, (Tube186Enabled)?MF_CHECKED:MF_UNCHECKED);
+#endif
     CheckMenuItem(m_hMenu, IDM_TORCH, (TorchTube)?MF_CHECKED:MF_UNCHECKED);
     CheckMenuItem(m_hMenu, IDM_ACORNZ80, (AcornZ80)?MF_CHECKED:MF_UNCHECKED);
     CheckMenuItem(m_hMenu, IDM_ARM, (ArmTube)?MF_CHECKED:MF_UNCHECKED);
-
-    CheckMenuItem(m_hMenu,ID_UNLOCKTAPE,(UnlockTape)?MF_CHECKED:MF_UNCHECKED);
-    CheckMenuItem(m_hMenu,m_MotionBlur,MF_CHECKED);
-    CheckMenuItem(hMenu, ID_ECONET, EconetEnabled ? MF_CHECKED:MF_UNCHECKED);   //Rob
+    SetRomMenu();
+    CheckMenuItem(hMenu, IDM_IGNOREILLEGALOPS, IgnoreIllegalInstructions ? MF_CHECKED : MF_UNCHECKED);
+    UpdateOptiMenu();
+    UpdateEconetMenu(hMenu);
     CheckMenuItem(hMenu, ID_TELETEXT, TeleTextAdapterEnabled ? MF_CHECKED:MF_UNCHECKED);
+    CheckMenuItem(hMenu, ID_FLOPPYDRIVE, Disc8271Enabled ? MF_CHECKED:MF_UNCHECKED);
     CheckMenuItem(hMenu, ID_HARDDRIVE, HardDriveEnabled ? MF_CHECKED:MF_UNCHECKED);
     CheckMenuItem(hMenu, ID_UPRM, RTC_Enabled ? MF_CHECKED:MF_UNCHECKED);
+    CheckMenuItem(hMenu, ID_RTCY2KADJUST, RTCY2KAdjust ? MF_CHECKED:MF_UNCHECKED);
 
-    CheckMenuItem(hMenu, IDM_SPEECH, SpeechDefault ? MF_CHECKED:MF_UNCHECKED);
-
+    // Options
+    CheckMenuItem(hMenu, IDM_JOYSTICK, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_AMOUSESTICK, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_DMOUSESTICK, MF_UNCHECKED);
+    if (m_MenuIdSticks != 0)
+        CheckMenuItem(hMenu, m_MenuIdSticks, MF_CHECKED);
+    CheckMenuItem(hMenu, IDM_FREEZEINACTIVE, m_FreezeWhenInactive ? MF_CHECKED : MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_HIDECURSOR, m_HideCursor ? MF_CHECKED : MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_DEFAULTKYBDMAPPING, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_LOGICALKYBDMAPPING, MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_USERKYBDMAPPING, MF_UNCHECKED);
+    CheckMenuItem(hMenu, m_MenuIdKeyMapping, MF_CHECKED);
+    CheckMenuItem(hMenu, IDM_MAPAS, m_KeyMapAS ? MF_CHECKED : MF_UNCHECKED);
+    CheckMenuItem(hMenu, IDM_MAPFUNCS, m_KeyMapFunc ? MF_CHECKED : MF_UNCHECKED);
+    UpdateDisableKeysMenu();
     CheckMenuItem(hMenu, IDM_AUTOSAVE_PREFS_CMOS, m_AutoSavePrefsCMOS ? MF_CHECKED : MF_UNCHECKED);
     CheckMenuItem(hMenu, IDM_AUTOSAVE_PREFS_FOLDERS, m_AutoSavePrefsFolders ? MF_CHECKED : MF_UNCHECKED);
     CheckMenuItem(hMenu, IDM_AUTOSAVE_PREFS_ALL, m_AutoSavePrefsAll ? MF_CHECKED : MF_UNCHECKED);
-
-    CheckMenuItem(hMenu, ID_SHOWCURSORLINE, ShowCursorLine ? MF_CHECKED : MF_UNCHECKED);
-    UpdateMonitorMenu();
-    UpdateDisableKeysMenu();
-
-    /* Initialise the ROM Menu. */
-    SetRomMenu();
-
-    SetSoundMenu();
 }
 
 void BeebWin::UpdateDisplayRendererMenu() {
@@ -668,6 +874,7 @@ void BeebWin::UpdateModelType() {
 void BeebWin::UpdateSFXMenu() {
     HMENU hMenu = m_hMenu;
     CheckMenuItem(hMenu,ID_SFX_RELAY,RelaySoundEnabled?MF_CHECKED:MF_UNCHECKED);
+    CheckMenuItem(hMenu,ID_SFX_DISCDRIVES,DiscDriveSoundEnabled?MF_CHECKED:MF_UNCHECKED);
 }
 
 void BeebWin::UpdateDisableKeysMenu() {
@@ -866,7 +1073,7 @@ LRESULT CALLBACK WndProc(
             break;
 
         case WM_SYSKEYDOWN:
-            //{char txt[100];sprintf(txt,"SysKeyD: %d, 0x%X\n", uParam, uParam);OutputDebugString(txt);}
+            //{char txt[100];sprintf(txt,"SysKeyD: %d, 0x%X, 0x%X\n", uParam, uParam, lParam);OutputDebugString(txt);}
             if (mainWin->m_TextToSpeechEnabled &&
                 ((uParam >= VK_NUMPAD0 && uParam <= VK_NUMPAD9) ||
                  uParam == VK_DECIMAL ||
@@ -883,11 +1090,16 @@ LRESULT CALLBACK WndProc(
             {
                 mainWin->TextViewSyncWithBeebCursor();
             }
+            else if (uParam == VK_RETURN && (lParam & 0x20000000))
+            {
+                mainWin->HandleCommand(IDM_FULLSCREEN);
+                break;
+            }
 
             if (uParam != VK_F10 && uParam != VK_CONTROL)
                 break;
         case WM_KEYDOWN:
-            //{char txt[100];sprintf(txt,"KeyD: %d, 0x%X\n", uParam, uParam);OutputDebugString(txt);}
+            //{char txt[100];sprintf(txt,"KeyD: %d, 0x%X, 0x%X\n", uParam, uParam, lParam);OutputDebugString(txt);}
             if (mainWin->m_TextToSpeechEnabled &&
                 ((uParam >= VK_NUMPAD0 && uParam <= VK_NUMPAD9) ||
                  uParam == VK_DECIMAL ||
@@ -899,6 +1111,12 @@ LRESULT CALLBACK WndProc(
                  uParam == VK_CLEAR))
             {
                 mainWin->TextToSpeechKey(uParam);
+            }
+            else if ((uParam == VK_DIVIDE || uParam == VK_MULTIPLY ||
+                      uParam == VK_ADD || uParam == VK_SUBTRACT) &&
+                     !mainWin->m_DisableKeysShortcut)
+            {
+                // Ignore shortcut key, handled on key up
             }
             else
             {
@@ -940,11 +1158,45 @@ LRESULT CALLBACK WndProc(
             break;
 
         case WM_SYSKEYUP:
-            //{char txt[100];sprintf(txt,"SysKeyU: %d, 0x%X\n", uParam, uParam);OutputDebugString(txt);}
+            //{char txt[100];sprintf(txt,"SysKeyU: %d, 0x%X, 0x%X\n", uParam, uParam, lParam);OutputDebugString(txt);}
+            if ((uParam == 0x35 || uParam == VK_NUMPAD5) && (lParam & 0x20000000))
+            {
+                mainWin->CaptureBitmapPending(true);
+                break;
+            }
+
+            if (uParam == 0x31 && (lParam & 0x20000000) && !mainWin->m_DisableKeysShortcut)
+            {
+                mainWin->QuickSave();
+                // Let user know state has been saved
+                FlashWindow(GETHWND, TRUE);
+                MessageBeep(MB_ICONEXCLAMATION);
+                break;
+            }
+            if (uParam == 0x32 && (lParam & 0x20000000) && !mainWin->m_DisableKeysShortcut)
+            {
+                mainWin->QuickLoad();
+                // Let user know state has been loaded
+                FlashWindow(GETHWND, TRUE);
+                MessageBeep(MB_ICONEXCLAMATION);
+                break;
+            }
+
+            if (uParam == VK_OEM_PLUS && (lParam & 0x20000000))
+            {
+                mainWin->AdjustSpeed(true);
+                break;
+            }
+            if (uParam == VK_OEM_MINUS && (lParam & 0x20000000))
+            {
+                mainWin->AdjustSpeed(false);
+                break;
+            }
+
             if (uParam != VK_F10 && uParam != VK_CONTROL)
                 break;
         case WM_KEYUP:
-            //{char txt[100];sprintf(txt,"KeyU: %d, 0x%X\n", uParam, uParam);OutputDebugString(txt);}
+            //{char txt[100];sprintf(txt,"KeyU: %d, 0x%X, 0x%X\n", uParam, uParam, lParam);OutputDebugString(txt);}
             if (uParam == VK_DIVIDE && !mainWin->m_DisableKeysShortcut)
             {
                 mainWin->QuickSave();
@@ -958,6 +1210,14 @@ LRESULT CALLBACK WndProc(
                 // Let user know state has been loaded
                 FlashWindow(GETHWND, TRUE);
                 MessageBeep(MB_ICONEXCLAMATION);
+            }
+            else if (uParam == VK_ADD && !mainWin->m_DisableKeysShortcut)
+            {
+                mainWin->AdjustSpeed(true);
+            }
+            else if (uParam == VK_SUBTRACT && !mainWin->m_DisableKeysShortcut)
+            {
+                mainWin->AdjustSpeed(false);
             }
             else
             {
@@ -993,7 +1253,9 @@ LRESULT CALLBACK WndProc(
                         { // Must do a reset!
                             Init6502core();
                             if (EnableTube) Init65C02core();
+#ifdef M512COPRO_ENABLED
                             if (Tube186Enabled) i86_main();
+#endif
                             Enable_Z80 = 0;
                             if (TorchTube || AcornZ80)
                             {
@@ -1024,10 +1286,6 @@ LRESULT CALLBACK WndProc(
                             if (col==-3) SoundTuning+=0.1; // Page Up
                             if (col==-4) SoundTuning-=0.1; // Page Down
                         }
-                        else if(row==-4)
-                        {
-                            mainWin->AdjustSpeed(col == 0);
-                        }
                     }
                 }
             }
@@ -1035,7 +1293,18 @@ LRESULT CALLBACK WndProc(
 
         case WM_ACTIVATE:
             if (mainWin)
+            {
                 mainWin->Activate(uParam != WA_INACTIVE);
+                if(uParam != WA_INACTIVE)
+                {
+                    // Bring debug window to foreground BEHIND main window.
+                    if(hwndDebug)
+                    {
+                        SetWindowPos(hwndDebug, GETHWND,0,0,0,0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW | SWP_NOACTIVATE);
+                        SetWindowPos(GETHWND, HWND_TOP,0,0,0,0, SWP_NOMOVE | SWP_NOSIZE);
+                    }
+                }
+            }
             break;
 
         case WM_SETFOCUS:
@@ -1116,12 +1385,20 @@ LRESULT CALLBACK WndProc(
                 mainWin->ResetTiming();
             break;
 
+        case WM_ENTERSIZEMOVE: // Window being moved
+            SetSound(MUTED);
+            break;
+        case WM_EXITSIZEMOVE:
+            SetSound(UNMUTED);
+            break;
+
         case WM_REINITDX:
             mainWin->ReinitDX();
             break;
 
         case WM_TIMER:
-            mainWin->HandleTimer();
+            if(uParam == 1)
+                mainWin->HandleTimer();
             break;
 
         default:          // Passes it on if unproccessed
@@ -1852,16 +2129,27 @@ void BeebWin::TranslateAMX(void)
 void BeebWin::UpdateSerialMenu(HMENU hMenu) {
     CheckMenuItem(hMenu, ID_SERIAL, (SerialPortEnabled)?MF_CHECKED:MF_UNCHECKED);
     CheckMenuItem(hMenu, ID_TOUCHSCREEN, (TouchScreenEnabled)?MF_CHECKED:MF_UNCHECKED);
+//  CheckMenuItem(hMenu, ID_IP232, (EthernetPortEnabled)?MF_CHECKED:MF_UNCHECKED);
+    CheckMenuItem(hMenu, ID_IP232LOCALHOST, (IP232localhost)?MF_CHECKED:MF_UNCHECKED);
+    CheckMenuItem(hMenu, ID_IP232CUSTOM, (IP232custom)?MF_CHECKED:MF_UNCHECKED);
+    CheckMenuItem(hMenu, ID_IP232MODE, (IP232mode)?MF_CHECKED:MF_UNCHECKED);
+    CheckMenuItem(hMenu, ID_IP232RAW, (IP232raw)?MF_CHECKED:MF_UNCHECKED);
+
     CheckMenuItem(hMenu, ID_COM1, (SerialPort==1)?MF_CHECKED:MF_UNCHECKED);
     CheckMenuItem(hMenu, ID_COM2, (SerialPort==2)?MF_CHECKED:MF_UNCHECKED);
     CheckMenuItem(hMenu, ID_COM3, (SerialPort==3)?MF_CHECKED:MF_UNCHECKED);
     CheckMenuItem(hMenu, ID_COM4, (SerialPort==4)?MF_CHECKED:MF_UNCHECKED);
 }
 
+void BeebWin::ExternUpdateSerialMenu(void) {
+    HMENU hMenu = m_hMenu;
+    UpdateSerialMenu(hMenu);
+}
+
+
 //Rob
 void BeebWin::UpdateEconetMenu(HMENU hMenu) {
     CheckMenuItem(hMenu, ID_ECONET, (EconetEnabled)?MF_CHECKED:MF_UNCHECKED);
-
 }
 
 void BeebWin::UpdateLEDMenu(HMENU hMenu) {
@@ -1878,8 +2166,6 @@ void BeebWin::UpdateOptiMenu(void) {
     CheckMenuItem(m_hMenu,ID_FULLSET,(OpCodes==3)?MF_CHECKED:MF_UNCHECKED);
     CheckMenuItem(m_hMenu,ID_BHARDWARE,(BHardware==1)?MF_CHECKED:MF_UNCHECKED);
     CheckMenuItem(m_hMenu,ID_TSTYLE,(THalfMode==1)?MF_CHECKED:MF_UNCHECKED);
-    CheckMenuItem(m_hMenu,ID_1773,(SBSize==1)?MF_CHECKED:MF_UNCHECKED);
-    CheckMenuItem(m_hMenu,ID_443,(SBSize==0)?MF_CHECKED:MF_UNCHECKED);
     CheckMenuItem(m_hMenu,ID_PSAMPLES,(PartSamples)?MF_CHECKED:MF_UNCHECKED);
 }
 /***************************************************************************/
@@ -1888,13 +2174,14 @@ void BeebWin::HandleCommand(int MenuId)
     char TmpPath[256];
     HMENU hMenu = m_hMenu;
     int prev_palette_type = palette_type;
+    int binsize = 0;
 
     SetSound(MUTED);
 
     switch (MenuId)
     {
     case IDM_RUNDISC:
-        if (ReadDisc(0,hMenu))
+        if (ReadDisc(0,hMenu, true))
         {
             m_ShiftBooted = true;
             ResetBeebSystem(MachineType,TubeEnabled,0);
@@ -1917,10 +2204,10 @@ void BeebWin::HandleCommand(int MenuId)
         break;
 
     case IDM_LOADDISC0:
-        ReadDisc(0,hMenu);
+        ReadDisc(0,hMenu, false);
         break;
     case IDM_LOADDISC1:
-        ReadDisc(1,hMenu);
+        ReadDisc(1,hMenu, false);
         break;
 
     case ID_LOADTAPE:
@@ -1952,6 +2239,31 @@ void BeebWin::HandleCommand(int MenuId)
         CheckMenuItem(hMenu, IDM_WPONLOAD, m_WriteProtectOnLoad ? MF_CHECKED : MF_UNCHECKED);
         break;
 
+    case IDM_EDIT_COPY:
+        doCopy();
+        break;
+    case IDM_EDIT_PASTE:
+        doPaste();
+        break;
+    case IDM_EDIT_CRLF:
+        m_translateCRLF = !m_translateCRLF;
+        CheckMenuItem(hMenu, IDM_EDIT_CRLF, m_translateCRLF ? MF_CHECKED : MF_UNCHECKED);
+        break;
+
+    case IDM_DISC_EXPORT_0:
+    case IDM_DISC_EXPORT_1:
+    case IDM_DISC_EXPORT_2:
+    case IDM_DISC_EXPORT_3:
+        ExportDiscFiles(MenuId);
+        break;
+
+    case IDM_DISC_IMPORT_0:
+    case IDM_DISC_IMPORT_1:
+    case IDM_DISC_IMPORT_2:
+    case IDM_DISC_IMPORT_3:
+        ImportDiscFiles(MenuId);
+        break;
+
     case IDM_PRINTER_FILE:
         if (PrinterFile())
         {
@@ -1977,6 +2289,18 @@ void BeebWin::HandleCommand(int MenuId)
             TranslatePrinterPort();
         }
         break;
+    case IDM_PRINTER_CLIPBOARD:
+        if (PrinterEnabled)
+            TogglePrinter();
+
+        if (MenuId != m_MenuIdPrinterPort)
+        {
+            CheckMenuItem(hMenu, m_MenuIdPrinterPort, MF_UNCHECKED);
+            m_MenuIdPrinterPort = MenuId;
+            CheckMenuItem(hMenu, m_MenuIdPrinterPort, MF_CHECKED);
+        }
+        TranslatePrinterPort();
+        break;
     case IDM_PRINTER_LPT1:
     case IDM_PRINTER_LPT2:
     case IDM_PRINTER_LPT3:
@@ -1999,13 +2323,34 @@ void BeebWin::HandleCommand(int MenuId)
         break;
 
     case ID_SERIAL:
-        if (TouchScreenEnabled)
-        {
-            TouchScreenClose();
-            TouchScreenEnabled = false;
-        }
 
+        if (SerialPortEnabled) { // so disabling..
+            if (TouchScreenEnabled)
+            {
+                TouchScreenClose();
+                TouchScreenEnabled = false;
+            }
+            if (EthernetPortEnabled)
+            {
+                IP232Close();
+                EthernetPortEnabled = false;
+    //          IP232custom = false;
+    //          IP232localhost = false;
+            }
+        }
         SerialPortEnabled=1-SerialPortEnabled;
+
+        if (SerialPortEnabled && (IP232custom || IP232localhost))
+        {
+            EthernetPortEnabled = true;
+            if (IP232Open() == false)
+            {
+                MessageBox(GETHWND,"Could not connect to specified address",WindowTitle,MB_OK|MB_ICONERROR);
+                bSerialStateChanged=TRUE;
+                UpdateSerialMenu(hMenu);
+                SerialPortEnabled=FALSE;
+            }
+        }
         bSerialStateChanged=TRUE;
         UpdateSerialMenu(hMenu);
         break;
@@ -2026,28 +2371,141 @@ void BeebWin::HandleCommand(int MenuId)
             if (m_MenuIdSticks != IDM_AMOUSESTICK)
                 HandleCommand(IDM_AMOUSESTICK);
 
+            if (EthernetPortEnabled)
+            {
+                IP232Close();
+                EthernetPortEnabled = false;
+            }
+            IP232custom = false;
+            IP232localhost = false;
+
             SerialPortEnabled = true;
 
             Kill_Serial();
-
             SerialPort = 0;
+
             bSerialStateChanged=TRUE;
             TouchScreenOpen();
         }
         UpdateSerialMenu(hMenu);
         break;
 
+    case ID_IP232MODE:
+        IP232mode = 1 - IP232mode;
+        UpdateSerialMenu(hMenu);
+        break;
+
+    case ID_IP232RAW:
+        IP232raw = 1 - IP232raw;
+        UpdateSerialMenu(hMenu);
+        break;
+
+    case ID_IP232LOCALHOST:
+
+        if (IP232localhost)
+        {
+            IP232Close();
+        }
+
+        IP232localhost = 1 - IP232localhost;
+
+        if (IP232localhost)
+        {
+            if (TouchScreenEnabled)
+            {
+                TouchScreenClose();
+            }
+            if (IP232custom) IP232Close();
+            IP232custom = false;
+            EthernetPortEnabled = true;
+            TouchScreenEnabled = false;
+
+            Kill_Serial();
+
+            SerialPort = 0;
+            bSerialStateChanged=TRUE;
+
+            strcpy(IPAddress,"127.0.0.1");
+            PortNo = 25232;
+
+            if (SerialPortEnabled) {
+                if (IP232Open() == false)
+                 {
+                    MessageBox(GETHWND,"Could not connect to specified address",WindowTitle,MB_OK|MB_ICONERROR);
+                    bSerialStateChanged=TRUE;
+                    UpdateSerialMenu(hMenu);
+                    SerialPortEnabled=FALSE;
+                }
+            }
+        }
+
+        if (IP232localhost == 0 &&  IP232custom == 0)
+        {
+            EthernetPortEnabled = false;
+            IP232Close();
+        }
+
+        UpdateSerialMenu(hMenu);
+        break;
+
+    case ID_IP232CUSTOM:
+
+        if (IP232custom)
+        {
+            IP232Close();
+        }
+
+        IP232custom = 1 - IP232custom;
+
+        if (IP232custom)
+        {
+            if (TouchScreenEnabled)
+            {
+                TouchScreenClose();
+            }
+            if (IP232localhost) IP232Close();
+            IP232localhost = false;
+            EthernetPortEnabled = true;
+            TouchScreenEnabled = false;
+
+            Kill_Serial();
+
+            SerialPort = 0;
+            bSerialStateChanged=TRUE;
+
+            strcpy(IPAddress,IP232customip);
+            PortNo = IP232customport;
+            if (SerialPortEnabled) {
+                if (IP232Open() == false)
+                 {
+                    MessageBox(GETHWND,"Could not connect to specified address",WindowTitle,MB_OK|MB_ICONERROR);
+                    bSerialStateChanged=TRUE;
+                    UpdateSerialMenu(hMenu);
+                    SerialPortEnabled=FALSE;
+                }
+            }
+        }
+
+        if (IP232localhost == 0 && IP232custom == 0)
+        {
+            EthernetPortEnabled = false;
+            IP232Close();
+        }
+
+        UpdateSerialMenu(hMenu);
+        break;
+
     case ID_COM1:
-        SerialPort=1; bSerialStateChanged=TRUE; TouchScreenEnabled = false; TouchScreenClose(); UpdateSerialMenu(hMenu); break;
+        SerialPort=1; bSerialStateChanged=TRUE; EthernetPortEnabled = false; IP232custom = false; IP232localhost = false; TouchScreenEnabled = false; IP232Close(); TouchScreenClose(); UpdateSerialMenu(hMenu); break;
 
     case ID_COM2:
-        SerialPort=2; bSerialStateChanged=TRUE; TouchScreenEnabled = false; TouchScreenClose(); UpdateSerialMenu(hMenu); break;
+        SerialPort=2; bSerialStateChanged=TRUE; EthernetPortEnabled = false; IP232custom = false; IP232localhost = false; TouchScreenEnabled = false; IP232Close(); TouchScreenClose(); UpdateSerialMenu(hMenu); break;
 
     case ID_COM3:
-        SerialPort=3; bSerialStateChanged=TRUE; TouchScreenEnabled = false; TouchScreenClose(); UpdateSerialMenu(hMenu); break;
+        SerialPort=3; bSerialStateChanged=TRUE; EthernetPortEnabled = false; IP232custom = false; IP232localhost = false; TouchScreenEnabled = false; IP232Close(); TouchScreenClose(); UpdateSerialMenu(hMenu); break;
 
     case ID_COM4:
-        SerialPort=4; bSerialStateChanged=TRUE; TouchScreenEnabled = false; TouchScreenClose(); UpdateSerialMenu(hMenu); break;
+        SerialPort=4; bSerialStateChanged=TRUE; EthernetPortEnabled = false; IP232custom = false; IP232localhost = false; TouchScreenEnabled = false; IP232Close(); TouchScreenClose(); UpdateSerialMenu(hMenu); break;
 
 
     //Rob
@@ -2071,10 +2529,7 @@ void BeebWin::HandleCommand(int MenuId)
     case IDM_DISPDX9:
     {
         int enabled;
-        if (m_DisplayRenderer != IDM_DISPGDI)
-        {
-            ExitDX();
-        }
+        ExitDX();
 
         m_DisplayRenderer = MenuId;
         TranslateWindowSize();
@@ -2091,6 +2546,7 @@ void BeebWin::HandleCommand(int MenuId)
         }
         UpdateDisplayRendererMenu();
         EnableMenuItem(hMenu, IDM_DXSMOOTHING, enabled);
+        EnableMenuItem(hMenu, IDM_DXSMOOTHMODE7ONLY, enabled);
         break;
     }
 
@@ -2099,7 +2555,16 @@ void BeebWin::HandleCommand(int MenuId)
         CheckMenuItem(hMenu, IDM_DXSMOOTHING, m_DXSmoothing ? MF_CHECKED : MF_UNCHECKED);
         if (m_DisplayRenderer != IDM_DISPGDI)
         {
-            ResetDX();
+            UpdateSmoothing();
+        }
+        break;
+
+    case IDM_DXSMOOTHMODE7ONLY:
+        m_DXSmoothMode7Only = !m_DXSmoothMode7Only;
+        CheckMenuItem(hMenu, IDM_DXSMOOTHMODE7ONLY, m_DXSmoothMode7Only ? MF_CHECKED : MF_UNCHECKED);
+        if (m_DisplayRenderer != IDM_DISPGDI)
+        {
+            UpdateSmoothing();
         }
         break;
 
@@ -2191,6 +2656,11 @@ void BeebWin::HandleCommand(int MenuId)
         CheckMenuItem(hMenu,ID_SFX_RELAY,RelaySoundEnabled?MF_CHECKED:MF_UNCHECKED);
         break;
 
+    case ID_SFX_DISCDRIVES:
+        DiscDriveSoundEnabled=1-DiscDriveSoundEnabled;
+        CheckMenuItem(hMenu,ID_SFX_DISCDRIVES,DiscDriveSoundEnabled?MF_CHECKED:MF_UNCHECKED);
+        break;
+
     case IDM_44100KHZ:
     case IDM_22050KHZ:
     case IDM_11025KHZ:
@@ -2207,11 +2677,13 @@ void BeebWin::HandleCommand(int MenuId)
                 SoundInit();
             }
 
+#ifdef SPEECH_ENABLED
             if (SpeechDefault)
             {
                 tms5220_stop();
                 tms5220_start();
             }
+#endif
         }
         break;
 
@@ -2440,6 +2912,9 @@ void BeebWin::HandleCommand(int MenuId)
         CheckMenuItem(hMenu, IDM_AUTOSAVE_PREFS_ALL, m_AutoSavePrefsAll ? MF_CHECKED : MF_UNCHECKED);
         m_AutoSavePrefsChanged = true;
         break;
+    case IDM_SELECT_USER_DATA_FOLDER:
+        SelectUserDataPath();
+        break;
 
     case IDM_AMXONOFF:
         if (AMXMouseEnabled)
@@ -2522,11 +2997,15 @@ void BeebWin::HandleCommand(int MenuId)
     case IDM_ARM:
         ArmTube=1-ArmTube;
         TubeEnabled = 0;
+#ifdef M512COPRO_ENABLED
         Tube186Enabled = 0;
+#endif
         TorchTube = 0;
         AcornZ80 = 0;
         CheckMenuItem(hMenu, IDM_TUBE, (TubeEnabled)?MF_CHECKED:MF_UNCHECKED);
+#ifdef M512COPRO_ENABLED
         CheckMenuItem(hMenu, IDM_TUBE186, (Tube186Enabled)?MF_CHECKED:MF_UNCHECKED);
+#endif
         CheckMenuItem(hMenu, IDM_TORCH, (TorchTube)?MF_CHECKED:MF_UNCHECKED);
         CheckMenuItem(hMenu, IDM_ARM, (ArmTube)?MF_CHECKED:MF_UNCHECKED);
         CheckMenuItem(hMenu, IDM_ACORNZ80, (AcornZ80)?MF_CHECKED:MF_UNCHECKED);
@@ -2535,18 +3014,23 @@ void BeebWin::HandleCommand(int MenuId)
 
     case IDM_TUBE:
         TubeEnabled=1-TubeEnabled;
+#ifdef M512COPRO_ENABLED
         Tube186Enabled = 0;
+#endif
         TorchTube = 0;
         ArmTube = 0;
         AcornZ80 = 0;
         CheckMenuItem(hMenu, IDM_TUBE, (TubeEnabled)?MF_CHECKED:MF_UNCHECKED);
         CheckMenuItem(hMenu, IDM_ARM, (ArmTube)?MF_CHECKED:MF_UNCHECKED);
+#ifdef M512COPRO_ENABLED
         CheckMenuItem(hMenu, IDM_TUBE186, (Tube186Enabled)?MF_CHECKED:MF_UNCHECKED);
+#endif
         CheckMenuItem(hMenu, IDM_TORCH, (TorchTube)?MF_CHECKED:MF_UNCHECKED);
         CheckMenuItem(hMenu, IDM_ACORNZ80, (AcornZ80)?MF_CHECKED:MF_UNCHECKED);
         ResetBeebSystem(MachineType,TubeEnabled,0);
         break;
 
+#ifdef M512COPRO_ENABLED
     case IDM_TUBE186:
         Tube186Enabled=1-Tube186Enabled;
         TubeEnabled = 0;
@@ -2560,16 +3044,21 @@ void BeebWin::HandleCommand(int MenuId)
         CheckMenuItem(hMenu, IDM_ACORNZ80, (AcornZ80)?MF_CHECKED:MF_UNCHECKED);
         ResetBeebSystem(MachineType,TubeEnabled,0);
         break;
+#endif
 
     case IDM_TORCH:
         TorchTube=1-TorchTube;
         TubeEnabled=0;
+#ifdef M512COPRO_ENABLED
         Tube186Enabled=0;
+#endif
         AcornZ80 = 0;
         ArmTube = 0;
         CheckMenuItem(hMenu, IDM_ARM, (ArmTube)?MF_CHECKED:MF_UNCHECKED);
         CheckMenuItem(hMenu, IDM_TUBE, (TubeEnabled)?MF_CHECKED:MF_UNCHECKED);
+#ifdef M512COPRO_ENABLED
         CheckMenuItem(hMenu, IDM_TUBE186, (Tube186Enabled)?MF_CHECKED:MF_UNCHECKED);
+#endif
         CheckMenuItem(hMenu, IDM_TORCH, (TorchTube)?MF_CHECKED:MF_UNCHECKED);
         CheckMenuItem(hMenu, IDM_ACORNZ80, (AcornZ80)?MF_CHECKED:MF_UNCHECKED);
         ResetBeebSystem(MachineType,TubeEnabled,0);
@@ -2579,11 +3068,15 @@ void BeebWin::HandleCommand(int MenuId)
         AcornZ80=1-AcornZ80;
         TubeEnabled=0;
         TorchTube=0;
+#ifdef M512COPRO_ENABLED
         Tube186Enabled=0;
+#endif
         ArmTube = 0;
         CheckMenuItem(hMenu, IDM_ARM, (ArmTube)?MF_CHECKED:MF_UNCHECKED);
         CheckMenuItem(hMenu, IDM_TUBE, (TubeEnabled)?MF_CHECKED:MF_UNCHECKED);
+#ifdef M512COPRO_ENABLED
         CheckMenuItem(hMenu, IDM_TUBE186, (Tube186Enabled)?MF_CHECKED:MF_UNCHECKED);
+#endif
         CheckMenuItem(hMenu, IDM_TORCH, (TorchTube)?MF_CHECKED:MF_UNCHECKED);
         CheckMenuItem(hMenu, IDM_ACORNZ80, (AcornZ80)?MF_CHECKED:MF_UNCHECKED);
         ResetBeebSystem(MachineType,TubeEnabled,0);
@@ -2741,14 +3234,6 @@ void BeebWin::HandleCommand(int MenuId)
         PartSamples=1-PartSamples;
         UpdateOptiMenu();
         break;
-    case ID_1773:
-        SBSize=1;
-        UpdateOptiMenu();
-        break;
-    case ID_443:
-        SBSize=0;
-        UpdateOptiMenu();
-        break;
     case IDM_EXPVOLUME:
         SoundExponentialVolume=1-SoundExponentialVolume;
         CheckMenuItem(m_hMenu, IDM_EXPVOLUME, SoundExponentialVolume ? MF_CHECKED:MF_UNCHECKED);
@@ -2771,6 +3256,34 @@ void BeebWin::HandleCommand(int MenuId)
             m_MotionBlur = MenuId;
             CheckMenuItem(hMenu, m_MotionBlur, MF_CHECKED);
         }
+        break;
+
+    case IDM_CAPTURERES1:
+    case IDM_CAPTURERES2:
+    case IDM_CAPTURERES3:
+        if (MenuId != m_MenuIdCaptureResolution)
+        {
+            CheckMenuItem(hMenu, m_MenuIdCaptureResolution, MF_UNCHECKED);
+            m_MenuIdCaptureResolution = MenuId;
+            CheckMenuItem(hMenu, m_MenuIdCaptureResolution, MF_CHECKED);
+        }
+        break;
+    case IDM_CAPTUREBMP:
+    case IDM_CAPTUREJPEG:
+    case IDM_CAPTUREGIF:
+    case IDM_CAPTUREPNG:
+        if (MenuId != m_MenuIdCaptureFormat)
+        {
+            CheckMenuItem(hMenu, m_MenuIdCaptureFormat, MF_UNCHECKED);
+            m_MenuIdCaptureFormat = MenuId;
+            CheckMenuItem(hMenu, m_MenuIdCaptureFormat, MF_CHECKED);
+        }
+        break;
+    case IDM_CAPTURESCREEN:
+        // Prompt for file name.  Need to do this in WndProc otherwise
+        // dialog does not show in full screen mode.
+        if (GetImageFile(m_CaptureFileName))
+            CaptureBitmapPending(false);
         break;
 
     case IDM_VIDEORES1:
@@ -2807,6 +3320,7 @@ void BeebWin::HandleCommand(int MenuId)
         }
         break;
 
+#ifdef SPEECH_ENABLED
     case IDM_SPEECH:
         if (SpeechDefault)
         {
@@ -2824,6 +3338,7 @@ void BeebWin::HandleCommand(int MenuId)
             }
         }
         break;
+#endif
 
     case ID_TELETEXT:
         TeleTextAdapterEnabled = 1-TeleTextAdapterEnabled;
@@ -2836,6 +3351,18 @@ void BeebWin::HandleCommand(int MenuId)
         SCSIReset();
         SASIReset();
         CheckMenuItem(hMenu, ID_HARDDRIVE, HardDriveEnabled ? MF_CHECKED:MF_UNCHECKED);
+        break;
+
+    case ID_FLOPPYDRIVE:
+        Disc8271Enabled = 1-Disc8271Enabled;
+        Disc1770Enabled = 1-Disc1770Enabled;
+        CheckMenuItem(hMenu, ID_FLOPPYDRIVE, Disc8271Enabled ? MF_CHECKED:MF_UNCHECKED);
+        break;
+
+    case ID_RTCY2KADJUST:
+        RTCY2KAdjust = 1-RTCY2KAdjust;
+        RTCInit();
+        CheckMenuItem(hMenu, ID_RTCY2KADJUST, RTCY2KAdjust ? MF_CHECKED:MF_UNCHECKED);
         break;
 
     case IDM_TEXTTOSPEECH:
@@ -2861,8 +3388,8 @@ void BeebWin::HandleCommand(int MenuId)
                            WindowTitle,MB_YESNO|MB_ICONQUESTION) == IDYES)
             {
                 int binsize=sizeof(CFG_DISABLE_WINDOWS_KEYS);
-                SysReg.SetBinaryValue(HKEY_LOCAL_MACHINE, CFG_KEYBOARD_LAYOUT,
-                                      CFG_SCANCODE_MAP, CFG_DISABLE_WINDOWS_KEYS, &binsize);
+                RegSetBinaryValue(HKEY_LOCAL_MACHINE, CFG_KEYBOARD_LAYOUT,
+                                  CFG_SCANCODE_MAP, CFG_DISABLE_WINDOWS_KEYS, &binsize);
                 reboot = true;
             }
             else
@@ -2873,11 +3400,9 @@ void BeebWin::HandleCommand(int MenuId)
         }
         else
         {
-            // Delete does not work?
-            // SysReg.DeleteKey(HKEY_LOCAL_MACHINE, CFG_KEYBOARD_LAYOUT "\\" CFG_SCANCODE_MAP);
             int binsize=0;
-            SysReg.SetBinaryValue(HKEY_LOCAL_MACHINE, CFG_KEYBOARD_LAYOUT,
-                                  CFG_SCANCODE_MAP, CFG_DISABLE_WINDOWS_KEYS, &binsize);
+            RegSetBinaryValue(HKEY_LOCAL_MACHINE, CFG_KEYBOARD_LAYOUT,
+                              CFG_SCANCODE_MAP, CFG_DISABLE_WINDOWS_KEYS, &binsize);
             reboot = true;
         }
 
@@ -2924,11 +3449,6 @@ void BeebWin::HandleCommand(int MenuId)
         }
         UpdateDisableKeysMenu();
         break;
-
-    case ID_SHOWCURSORLINE:
-        ShowCursorLine = 1 - ShowCursorLine;
-        CheckMenuItem(hMenu, ID_SHOWCURSORLINE, ShowCursorLine ? MF_CHECKED : MF_UNCHECKED);
-        break;
     }
 
     SetSound(UNMUTED);
@@ -2944,7 +3464,7 @@ void BeebWin::SetPBuff(void) {
 }
 
 void BeebWin::SetSoundMenu(void) {
-    CheckMenuItem(m_hMenu,IDM_SOUNDONOFF,(SoundEnabled)?MF_CHECKED:MF_UNCHECKED);
+    CheckMenuItem(m_hMenu,IDM_SOUNDONOFF,(SoundEnabled && SoundDefault)?MF_CHECKED:MF_UNCHECKED);
     SetPBuff();
 }
 
@@ -2979,11 +3499,12 @@ void BeebWin::ParseCommandLine()
     int a;
     bool invalid;
 
-    m_CommandLineFileName = NULL;
+    m_CommandLineFileName[0] = 0;
 
     i = 1;
     while (i < __argc)
     {
+        // Params with no arguments
         if (_stricmp(__argv[i], "-DisMenu") == 0)
         {
             DisableMenu = 1;
@@ -2997,7 +3518,7 @@ void BeebWin::ParseCommandLine()
             sprintf(errstr,"Invalid command line parameter:\n  %s", __argv[i]);
             MessageBox(m_hWnd,errstr,WindowTitle,MB_OK|MB_ICONERROR);
         }
-        else
+        else // Params with additional arguments
         {
             invalid = false;
             if (_stricmp(__argv[i], "-Data") == 0)
@@ -3045,7 +3566,11 @@ void BeebWin::ParseCommandLine()
             }
             else if (_stricmp(__argv[i], "-KbdCmd") == 0)
             {
-                strncpy(m_KbdCmd, __argv[++i], 1024);
+                strncpy(m_KbdCmd, __argv[++i], sizeof(m_KbdCmd));
+            }
+            else if (_stricmp(__argv[i], "-DebugScript") == 0)
+            {
+                strncpy(m_DebugScript, __argv[++i], sizeof(m_DebugScript));
             }
             else if (__argv[i][0] == '-')
             {
@@ -3055,7 +3580,7 @@ void BeebWin::ParseCommandLine()
             else
             {
                 // Assume its a file name
-                m_CommandLineFileName = __argv[i];
+                strncpy(m_CommandLineFileName, __argv[i], _MAX_PATH);
             }
 
             if (invalid)
@@ -3070,9 +3595,59 @@ void BeebWin::ParseCommandLine()
 }
 
 /*****************************************************************************/
-// Handle a file name passed on command line
+// Check for preference files in the same directory as the file specified
+void BeebWin::CheckForLocalPrefs(const char *path, bool bLoadPrefs)
+{
+    char file[_MAX_PATH];
+    char drive[_MAX_DRIVE];
+    char dir[_MAX_DIR];
+    FILE *fd;
 
-void BeebWin::HandleCommandLineFile()
+    if (path[0] == 0)
+        return;
+
+    _splitpath(path, drive, dir, NULL, NULL);
+
+    // Look for prefs file
+    _makepath(file, drive, dir, "Preferences", "cfg");
+    fd = fopen(file, "r");
+    if (fd != NULL)
+    {
+        fclose(fd);
+        // File exists, use it
+        strcpy(m_PrefsFile, file);
+        if (bLoadPrefs)
+        {
+            LoadPreferences();
+
+            // Reinit with new prefs
+            SetWindowPos(m_hWnd, HWND_TOP, m_XWinPos, m_YWinPos,
+                         0, 0, SWP_NOSIZE);
+            HandleCommand(m_DisplayRenderer);
+            InitMenu();
+            SetWindowText(m_hWnd, WindowTitle);
+            if (m_MenuIdSticks == IDM_JOYSTICK)
+                InitJoystick();
+        }
+    }
+
+    // Look for ROMs file
+    _makepath(file, drive, dir, "Roms", "cfg");
+    fd = fopen(file, "r");
+    if (fd != NULL)
+    {
+        fclose(fd);
+        // File exists, use it
+        strcpy(RomFile, file);
+        if (bLoadPrefs)
+            BeebReadRoms();
+    }
+}
+
+/*****************************************************************************/
+// File location of a file passed on command line
+
+void BeebWin::FindCommandLineFile()
 {
     bool ssd = false;
     bool dsd = false;
@@ -3084,9 +3659,10 @@ void BeebWin::HandleCommandLineFile()
     bool csw = false;
 
     // See if file is readable
-    if (m_CommandLineFileName != NULL)
+    if (m_CommandLineFileName[0] != 0)
     {
         FileName = m_CommandLineFileName;
+        strncpy(TmpPath, m_CommandLineFileName, _MAX_PATH);
 
         // Work out which type of files it is
         char *ext = strrchr(FileName, '.');
@@ -3180,6 +3756,80 @@ void BeebWin::HandleCommandLineFile()
                 FileName = TmpPath;
                 fclose(fd);
             }
+        }
+
+        if (!cont)
+        {
+            char errstr[200];
+            sprintf(errstr,"Cannot find file:\n  %s", FileName);
+            MessageBox(m_hWnd,errstr,WindowTitle,MB_OK|MB_ICONERROR);
+            cont = false;
+        }
+    }
+
+    if (cont)
+    {
+        PathCanonicalize(m_CommandLineFileName, TmpPath);
+    }
+    else
+    {
+        m_CommandLineFileName[0] = 0;
+    }
+}
+
+/*****************************************************************************/
+// Handle a file name passed on command line
+
+void BeebWin::HandleCommandLineFile()
+{
+    bool ssd = false;
+    bool dsd = false;
+    bool adfs = false;
+    bool cont = false;
+    char *FileName = NULL;
+    bool uef = false;
+    bool csw = false;
+
+    if (m_CommandLineFileName[0] != 0)
+    {
+        FileName = m_CommandLineFileName;
+
+        // Work out which type of files it is
+        char *ext = strrchr(FileName, '.');
+        if (ext != NULL)
+        {
+            cont = true;
+            if (_stricmp(ext+1, "ssd") == 0)
+                ssd = true;
+            else if (_stricmp(ext+1, "dsd") == 0)
+                dsd = true;
+            else if (_stricmp(ext+1, "adl") == 0)
+                adfs = true;
+            else if (_stricmp(ext+1, "adf") == 0)
+                adfs = true;
+            else if (_stricmp(ext+1, "uef") == 0)
+                uef = true;
+            else if (_stricmp(ext+1, "csw") == 0)
+                csw = true;
+            else
+            {
+                char errstr[200];
+                sprintf(errstr,"Unrecognised file type:\n  %s", FileName);
+                MessageBox(m_hWnd,errstr,WindowTitle,MB_OK|MB_ICONERROR);
+                cont = false;
+            }
+        }
+    }
+
+    if (cont)
+    {
+        cont = false;
+
+        FILE *fd = fopen(FileName, "rb");
+        if (fd != NULL)
+        {
+            cont = true;
+            fclose(fd);
         }
 
         if (!cont)
@@ -3302,6 +3952,7 @@ bool BeebWin::CheckUserDataPath()
 {
     bool success = true;
     bool copy_user_files = false;
+    bool store_user_data_path = false;
     char path[_MAX_PATH];
     char errstr[500];
     DWORD att;
@@ -3322,6 +3973,8 @@ bool BeebWin::CheckUserDataPath()
             // Use data dir installed with BeebEm
             strcpy(m_UserDataPath, m_AppPath);
             strcat(m_UserDataPath, "UserData\\");
+
+            store_user_data_path = true;
         }
         else
         {
@@ -3374,11 +4027,20 @@ bool BeebWin::CheckUserDataPath()
         }
         if (!copy_user_files)
         {
+            sprintf(path, "%sAUNMap", m_UserDataPath);
+            att = GetFileAttributes(path);
+            if (att == INVALID_FILE_ATTRIBUTES)
+                copy_user_files = true;
+        }
+#ifdef SPEECH_ENABLED
+        if (!copy_user_files)
+        {
             sprintf(path, "%sPhroms.cfg", m_UserDataPath);
             att = GetFileAttributes(path);
             if (att == INVALID_FILE_ATTRIBUTES)
                 copy_user_files = true;
         }
+#endif
         if (!copy_user_files)
         {
             if (strcmp(RomFile, "Roms.cfg") == 0)
@@ -3392,8 +4054,8 @@ bool BeebWin::CheckUserDataPath()
 
         if (copy_user_files)
         {
-            sprintf(errstr, "Essential files missing from BeebEm data folder:\n  %s"
-                    "\n\nCopy essential files into folder?", m_UserDataPath);
+            sprintf(errstr, "Essential or new files missing from BeebEm data folder:\n  %s"
+                    "\n\nCopy essential or new files into folder?", m_UserDataPath);
             if (MessageBox(m_hWnd, errstr, WindowTitle, MB_YESNO|MB_ICONQUESTION) != IDYES)
             {
                 success = false;
@@ -3440,21 +4102,113 @@ bool BeebWin::CheckUserDataPath()
 
     if (success)
     {
-        // Check that user specified roms file exists
-        if (strcmp(RomFile, "Roms.cfg") != 0)
+        // Check that roms file exists and create its full path
+        if (PathIsRelative(RomFile))
         {
             sprintf(path, "%s%s", m_UserDataPath, RomFile);
-            att = GetFileAttributes(path);
-            if (att == INVALID_FILE_ATTRIBUTES)
-            {
-                sprintf(errstr, "Cannot open ROMs file:\n  %s", path);
-                MessageBox(m_hWnd, errstr, WindowTitle, MB_OK|MB_ICONERROR);
-                success = false;
-            }
+            strcpy(RomFile, path);
+        }
+        att = GetFileAttributes(RomFile);
+        if (att == INVALID_FILE_ATTRIBUTES)
+        {
+            sprintf(errstr, "Cannot open ROMs file:\n  %s", RomFile);
+            MessageBox(m_hWnd, errstr, WindowTitle, MB_OK|MB_ICONERROR);
+            success = false;
         }
     }
 
+    if (success)
+    {
+        // Fill out full path of prefs file
+        if (PathIsRelative(m_PrefsFile))
+        {
+            sprintf(path, "%s%s", m_UserDataPath, m_PrefsFile);
+            strcpy(m_PrefsFile, path);
+        }
+    }
+
+    if (success && (copy_user_files || store_user_data_path))
+    {
+        StoreUserDataPath();
+    }
+
     return success;
+}
+
+void BeebWin::StoreUserDataPath()
+{
+    // Store user data path in registry
+    RegCreateKey(HKEY_CURRENT_USER, CFG_REG_KEY);
+    RegSetStringValue(HKEY_CURRENT_USER, CFG_REG_KEY,
+                      "UserDataFolder", m_UserDataPath);
+}
+
+/****************************************************************************/
+/* Selection of User Data Folder */
+static char szExportUserDataPath[MAX_PATH];
+
+int CALLBACK BrowseUserDataCallbackProc(HWND hwnd, UINT uMsg, LPARAM lParam, LPARAM lpData)
+{
+    switch (uMsg)
+    {
+    case BFFM_INITIALIZED:
+        if (szExportUserDataPath[0])
+        {
+            SendMessage(hwnd, BFFM_SETEXPANDED, TRUE, (LPARAM)szExportUserDataPath);
+            SendMessage(hwnd, BFFM_SETSELECTION, TRUE, (LPARAM)szExportUserDataPath);
+        }
+        break;
+    }
+    return 0;
+}
+
+void BeebWin::SelectUserDataPath()
+{
+    char szDisplayName[MAX_PATH];
+    char szPathBackup[MAX_PATH];
+    BROWSEINFO bi;
+
+    memset(&bi, 0, sizeof(bi));
+    bi.hwndOwner = m_hWnd;
+    bi.pszDisplayName = szDisplayName;
+    bi.lpszTitle = "Select folder for user data files:";
+    bi.ulFlags = BIF_EDITBOX | BIF_NEWDIALOGSTYLE;
+    bi.lpfn = BrowseUserDataCallbackProc;
+    LPITEMIDLIST idList = SHBrowseForFolder(&bi);
+    if (idList != NULL)
+    {
+        if (SHGetPathFromIDList(idList, szExportUserDataPath) == FALSE)
+        {
+            MessageBox(m_hWnd, "Invalid folder selected", WindowTitle, MB_OK|MB_ICONWARNING);
+        }
+        else
+        {
+            strcpy(szPathBackup, m_UserDataPath);
+            strcpy(m_UserDataPath, szExportUserDataPath);
+            strcat(m_UserDataPath, "\\");
+
+            // Check folder contents
+            if (CheckUserDataPath() == false)
+            {
+                strcpy(m_UserDataPath, szPathBackup);
+            }
+            else
+            {
+                // Store the new path
+                StoreUserDataPath();
+
+                // Reset prefs and roms file paths
+                strcpy(m_PrefsFile, "Preferences.cfg");
+                strcpy(RomFile, "Roms.cfg");
+                CheckForLocalPrefs(m_UserDataPath, true);
+
+                // Load and apply prefs
+                LoadPreferences();
+                ApplyPrefs();
+            }
+        }
+        CoTaskMemFree(idList);
+    }
 }
 
 /****************************************************************************/
@@ -3544,4 +4298,105 @@ void BeebWin::HandleTimer()
             SetTimer(m_hWnd, 1, m_KbdCmdDelay, NULL);
         }
     }
+}
+
+/****************************************************************************/
+bool BeebWin::RegCreateKey(HKEY hKeyRoot, LPSTR lpSubKey)
+{
+    bool rc = false;
+    HKEY hKeyResult;
+    if ((RegCreateKeyEx(hKeyRoot, lpSubKey, 0, NULL, 0, KEY_ALL_ACCESS,
+                        NULL, &hKeyResult, NULL)) == ERROR_SUCCESS)
+    {
+        RegCloseKey(hKeyResult);
+        rc = true;
+    }
+    return rc;
+}
+
+bool BeebWin::RegGetBinaryValue(
+    HKEY hKeyRoot, LPSTR lpSubKey, LPSTR lpValue, PVOID pData, int* pnSize)
+{
+    bool rc = false;
+    HKEY hKeyResult;
+    DWORD dwType = REG_BINARY;
+    DWORD dwSize = *pnSize;
+    LONG lRes = 0;
+
+    if ((RegOpenKeyEx(hKeyRoot, lpSubKey, 0, KEY_ALL_ACCESS, &hKeyResult)) == ERROR_SUCCESS)
+    {
+        lRes = RegQueryValueEx(hKeyResult, lpValue, NULL, &dwType, (LPBYTE)pData, &dwSize);
+        if (lRes == ERROR_SUCCESS && dwType == REG_BINARY)
+        {
+            *pnSize = dwSize;
+            rc = true;
+        }
+        RegCloseKey(hKeyResult);
+    }
+
+    return rc;
+}
+
+bool BeebWin::RegSetBinaryValue(
+    HKEY hKeyRoot, LPSTR lpSubKey, LPSTR lpValue, PVOID pData, int* pnSize)
+{
+    bool rc = false;
+    HKEY hKeyResult;
+    DWORD dwSize = *pnSize;
+    LONG  lRes = 0;
+
+    if ((RegOpenKeyEx(hKeyRoot, lpSubKey, 0, KEY_ALL_ACCESS, &hKeyResult)) == ERROR_SUCCESS)
+    {
+        lRes = RegSetValueEx(hKeyResult, lpValue, 0, REG_BINARY, reinterpret_cast<BYTE*>(pData), dwSize);
+        if (lRes == ERROR_SUCCESS)
+        {
+            *pnSize = dwSize;
+            rc = true;
+        }
+        RegCloseKey(hKeyResult);
+    }
+
+    return rc;
+}
+
+bool BeebWin::RegGetStringValue(
+    HKEY hKeyRoot, LPSTR lpSubKey, LPSTR lpValue, LPSTR pData, DWORD dwSize)
+{
+    bool rc = false;
+    HKEY hKeyResult;
+    DWORD dwType = REG_SZ;
+    LONG lRes = 0;
+
+    if ((RegOpenKeyEx(hKeyRoot, lpSubKey, 0, KEY_ALL_ACCESS, &hKeyResult)) == ERROR_SUCCESS)
+    {
+        lRes = RegQueryValueEx(hKeyResult, lpValue, NULL, &dwType, (LPBYTE)pData, &dwSize);
+        if (lRes == ERROR_SUCCESS && dwType == REG_SZ)
+        {
+            rc = true;
+        }
+        RegCloseKey(hKeyResult);
+    }
+
+    return rc;
+}
+
+bool BeebWin::RegSetStringValue(
+    HKEY hKeyRoot, LPSTR lpSubKey, LPSTR lpValue, LPSTR pData)
+{
+    bool rc = false;
+    HKEY hKeyResult;
+    DWORD dwSize = (DWORD)strlen(pData);
+    LONG  lRes = 0;
+
+    if ((RegOpenKeyEx(hKeyRoot, lpSubKey, 0, KEY_ALL_ACCESS, &hKeyResult)) == ERROR_SUCCESS)
+    {
+        lRes = RegSetValueEx(hKeyResult, lpValue, 0, REG_SZ, reinterpret_cast<BYTE*>(pData), dwSize);
+        if (lRes == ERROR_SUCCESS)
+        {
+            rc = true;
+        }
+        RegCloseKey(hKeyResult);
+    }
+
+    return rc;
 }

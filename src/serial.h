@@ -1,3 +1,23 @@
+/****************************************************************
+BeebEm - BBC Micro and Master 128 Emulator
+Copyright (C) 2001  Richard Gellman
+Copyright (C) 2004  Mike Wyatt
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public
+License along with this program; if not, write to the Free
+Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+Boston, MA  02110-1301, USA.
+****************************************************************/
 // Serial/Cassette Support for BeebEm
 // Written by Richard Gellman
 
@@ -12,7 +32,11 @@ extern char map_desc[MAX_MAP_LINES][40];
 extern int map_time[MAX_MAP_LINES];
 extern unsigned char Clk_Divide;
 
+extern unsigned char ACIA_Control;
+extern unsigned int Tx_Rate, Rx_Rate;
+
 extern CycleCountT TapeTrigger;
+extern CycleCountT IP232RxTrigger;
 void Write_ACIA_Control(unsigned char CReg);
 void Write_ACIA_Tx_Data(unsigned char Data);
 void Write_SERPROC(unsigned char Data);

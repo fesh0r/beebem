@@ -61,7 +61,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="vfw32.lib zdll.lib winmm.lib ws2_32.lib ddraw.lib dsound.lib sapi.lib d3d9.lib shfolder.lib"
+				AdditionalDependencies="vfw32.lib zdll.lib winmm.lib ws2_32.lib ddraw.lib dsound.lib sapi.lib d3d9.lib shfolder.lib shlwapi.lib gdiplus.lib"
 				OutputFile="../BeebEm.exe"
 				LinkIncremental="2"
 				GenerateDebugInformation="true"
@@ -137,7 +137,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="vfw32.lib zdll.lib winmm.lib ws2_32.lib ddraw.lib dsound.lib sapi.lib d3d9.lib shfolder.lib"
+				AdditionalDependencies="vfw32.lib zdll.lib winmm.lib ws2_32.lib ddraw.lib dsound.lib sapi.lib d3d9.lib shfolder.lib shlwapi.lib gdiplus.lib"
 				OutputFile="../BeebEm.exe"
 				LinkIncremental="1"
 				GenerateDebugInformation="true"
@@ -229,10 +229,6 @@
 				>
 			</File>
 			<File
-				RelativePath=".\cRegistry.cpp"
-				>
-			</File>
-			<File
 				RelativePath=".\csw.cpp"
 				>
 			</File>
@@ -249,15 +245,11 @@
 				>
 			</File>
 			<File
+				RelativePath=".\discedit.cpp"
+				>
+			</File>
+			<File
 				RelativePath=".\econet.cpp"
-				>
-			</File>
-			<File
-				RelativePath=".\i386dasm.cpp"
-				>
-			</File>
-			<File
-				RelativePath=".\i86.cpp"
 				>
 			</File>
 			<File
@@ -278,10 +270,6 @@
 			</File>
 			<File
 				RelativePath=".\serialdevices.cpp"
-				>
-			</File>
-			<File
-				RelativePath=".\speech.cpp"
 				>
 			</File>
 			<File
@@ -359,10 +347,6 @@
 				>
 			</File>
 			<File
-				RelativePath=".\beebem.h"
-				>
-			</File>
-			<File
 				RelativePath=".\beebemrc.h"
 				>
 			</File>
@@ -376,10 +360,6 @@
 			</File>
 			<File
 				RelativePath=".\beebwin.h"
-				>
-			</File>
-			<File
-				RelativePath=".\cRegistry.h"
 				>
 			</File>
 			<File
@@ -399,7 +379,7 @@
 				>
 			</File>
 			<File
-				RelativePath=".\ea.h"
+				RelativePath=".\discedit.h"
 				>
 			</File>
 			<File
@@ -411,19 +391,7 @@
 				>
 			</File>
 			<File
-				RelativePath=".\i86.h"
-				>
-			</File>
-			<File
-				RelativePath=".\instr86.h"
-				>
-			</File>
-			<File
 				RelativePath=".\main.h"
-				>
-			</File>
-			<File
-				RelativePath=".\osd_cpu.h"
 				>
 			</File>
 			<File
@@ -444,10 +412,6 @@
 			</File>
 			<File
 				RelativePath=".\serialdevices.h"
-				>
-			</File>
-			<File
-				RelativePath=".\speech.h"
 				>
 			</File>
 			<File
@@ -480,6 +444,10 @@
 			</File>
 			<File
 				RelativePath=".\uservia.h"
+				>
+			</File>
+			<File
+				RelativePath=".\version.h"
 				>
 			</File>
 			<File

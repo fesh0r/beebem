@@ -1,25 +1,24 @@
-/****************************************************************************/
-/*              Beebem - (c) David Alan Gilbert 1994                        */
-/*              ------------------------------------                        */
-/* This program may be distributed freely within the following restrictions:*/
-/*                                                                          */
-/* 1) You may not charge for this program or for any part of it.            */
-/* 2) This copyright message must be distributed with all copies.           */
-/* 3) This program must be distributed complete with source code.  Binary   */
-/*    only distribution is not permitted.                                   */
-/* 4) The author offers no warrenties, or guarentees etc. - you use it at   */
-/*    your own risk.  If it messes something up or destroys your computer   */
-/*    thats YOUR problem.                                                   */
-/* 5) You may use small sections of code from this program in your own      */
-/*    applications - but you must acknowledge its use.  If you plan to use  */
-/*    large sections then please ask the author.                            */
-/*                                                                          */
-/* If you do not agree with any of the above then please do not use this    */
-/* program.                                                                 */
-/* Please report any problems to the author at beebem@treblig.org           */
-/****************************************************************************/
-/* User VIA support file for the beeb emulator - David Alan Gilbert 11/12/94 */
-/* Modified from the system via */
+/****************************************************************
+BeebEm - BBC Micro and Master 128 Emulator
+Copyright (C) 1994  David Alan Gilbert
+Copyright (C) 1997  Mike Wyatt
+Copyright (C) 2004  Ken Lowe
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public
+License along with this program; if not, write to the Free
+Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+Boston, MA  02110-1301, USA.
+****************************************************************/
 
 #ifdef WIN32
 #include <windows.h>
@@ -179,25 +178,34 @@ static int last_Value = 0xff;
       break;
 
     case 1:
-      UserVIAState.ora=Value & 0xff;
-      UserVIAState.ifr&=0xfc;
-      UpdateIFRTopBit();
-      if (PrinterEnabled) {
-        if (fputc(UserVIAState.ora, PrinterFileHandle) == EOF) {
+        UserVIAState.ora=Value & 0xff;
+        UserVIAState.ifr&=0xfc;
+        UpdateIFRTopBit();
+        if (PrinterEnabled) {
+            if (PrinterFileHandle != NULL)
+            {
+                if (fputc(UserVIAState.ora, PrinterFileHandle) == EOF) {
 #ifdef WIN32
-          char errstr[200];
-          sprintf(errstr, "Failed to write to printer file:\n  %s", PrinterFileName);
-          MessageBox(GETHWND,errstr,WindowTitle,MB_OK|MB_ICONERROR);
+                    char errstr[200];
+                    sprintf(errstr, "Failed to write to printer file:\n  %s", PrinterFileName);
+                    MessageBox(GETHWND,errstr,WindowTitle,MB_OK|MB_ICONERROR);
 #else
-          cerr << "Failed to write to printer file " << PrinterFileName << "\n";
+                    cerr << "Failed to write to printer file " << PrinterFileName << "\n";
 #endif
+                }
+                else {
+                    fflush(PrinterFileHandle);
+                    SetTrigger(PRINTER_TRIGGER, PrinterTrigger);
+                }
+            }
+            else
+            {
+                // Write to clipboard
+                mainWin->CopyKey(UserVIAState.ora);
+                SetTrigger(PRINTER_TRIGGER, PrinterTrigger);
+            }
         }
-        else {
-          fflush(PrinterFileHandle);
-          SetTrigger(PRINTER_TRIGGER, PrinterTrigger);
-        }
-      }
-      break;
+        break;
 
     case 2:
       UserVIAState.ddrb=Value & 0xff;
@@ -314,12 +322,14 @@ int UserVIARead(int Address) {
             AMXButtons &= ~AMX_MIDDLE_BUTTON;
         }
 
+#ifdef M512COPRO_ENABLED
         if (Tube186Enabled)
         {
             tmp &= 0xf8;
             tmp |= (AMXButtons ^ 7);
         }
         else
+#endif
         {
             tmp &= 0x1f;
             tmp |= (AMXButtons ^ 7) << 5;
@@ -519,6 +529,7 @@ static bool first = true;
         if ( (AMXTargetX != AMXCurrentX) || (AMXTargetY != AMXCurrentY) )
         {
 
+#ifdef M512COPRO_ENABLED
             if (Tube186Enabled)
             {
 
@@ -551,6 +562,7 @@ static bool first = true;
                 }
             }
             else
+#endif
             {
 
                 if (AMXTargetX != AMXCurrentX)
@@ -594,6 +606,13 @@ void PrinterEnable(char *FileName) {
     {
         fclose(PrinterFileHandle);
         PrinterFileHandle = NULL;
+    }
+
+    if (FileName == NULL)
+    {
+        PrinterEnabled = 1;
+        SetTrigger(PRINTER_TRIGGER, PrinterTrigger);
+        return;
     }
 
     strcpy(PrinterFileName, FileName);

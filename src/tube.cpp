@@ -1,23 +1,25 @@
-/****************************************************************************/
-/*              Beebem - (c) David Alan Gilbert 1994                        */
-/*              ------------------------------------                        */
-/* This program may be distributed freely within the following restrictions:*/
-/*                                                                          */
-/* 1) You may not charge for this program or for any part of it.            */
-/* 2) This copyright message must be distributed with all copies.           */
-/* 3) This program must be distributed complete with source code.  Binary   */
-/*    only distribution is not permitted.                                   */
-/* 4) The author offers no warrenties, or guarentees etc. - you use it at   */
-/*    your own risk.  If it messes something up or destroys your computer   */
-/*    thats YOUR problem.                                                   */
-/* 5) You may use small sections of code from this program in your own      */
-/*    applications - but you must acknowledge its use.  If you plan to use  */
-/*    large sections then please ask the author.                            */
-/*                                                                          */
-/* If you do not agree with any of the above then please do not use this    */
-/* program.                                                                 */
-/* Please report any problems to the author at beebem@treblig.org           */
-/****************************************************************************/
+/****************************************************************
+BeebEm - BBC Micro and Master 128 Emulator
+Copyright (C) 1994  David Alan Gilbert
+Copyright (C) 1997  Mike Wyatt
+Copyright (C) 2001  Richard Gellman
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public
+License along with this program; if not, write to the Free
+Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+Boston, MA  02110-1301, USA.
+****************************************************************/
+
 /* 6502 core - 6502 emulator core - David Alan Gilbert 16/10/94 */
 /* Mike Wyatt 7/6/97 - Added undocumented instructions */
 /* Copied for 65C02 Tube core - 13/04/01 */
@@ -51,12 +53,16 @@
 static int CurrentInstruction;
 unsigned char TubeRam[65536];
 extern int DumpAfterEach;
-unsigned char TubeEnabled,Tube186Enabled,AcornZ80,EnableTube;
+unsigned char TubeEnabled,AcornZ80,EnableTube;
+#ifdef M512COPRO_ENABLED
+unsigned char Tube186Enabled;
+#endif
 unsigned char TubeMachineType=3;
 
 CycleCountT TotalTubeCycles=0;
 
 int TubeProgramCounter;
+static int PreTPC; // Previous Tube Program Counter;
 static int Accumulator,XReg,YReg;
 static unsigned char StackReg,PSR;
 static unsigned char IRQCycles;
@@ -67,15 +73,7 @@ static unsigned int NMILock=0; /* Well I think NMI's are maskable - to stop repe
 
 typedef int int16;
 
-enum PSRFlags {
-  FlagC=1,
-  FlagZ=2,
-  FlagI=4,
-  FlagD=8,
-  FlagB=16,
-  FlagV=64,
-  FlagN=128
-};
+
 
 /* Note how GETCFLAG is special since being bit 0 we don't need to test it to get a clean 0/1 */
 #define GETCFLAG ((PSR & FlagC))
@@ -368,7 +366,11 @@ void WriteTorchTubeFromParasiteSide(unsigned char IOAddr,unsigned char IOData)
 unsigned char ReadTubeFromHostSide(unsigned char IOAddr) {
     unsigned char TmpData,TmpCntr;
 
-    if (! (EnableTube || Tube186Enabled || AcornZ80 || ArmTube) )
+    if (! (EnableTube ||
+#ifdef M512COPRO_ENABLED
+           Tube186Enabled ||
+#endif
+           AcornZ80 || ArmTube) )
         return(MachineType==3 ? 0xff : 0xfe); // return ff for master else return fe
 
     switch (IOAddr) {
@@ -434,7 +436,11 @@ unsigned char ReadTubeFromHostSide(unsigned char IOAddr) {
 }
 
 void WriteTubeFromHostSide(unsigned char IOAddr,unsigned char IOData) {
-    if (! (EnableTube || Tube186Enabled || AcornZ80 || ArmTube) )
+    if (! (EnableTube ||
+#ifdef M512COPRO_ENABLED
+           Tube186Enabled ||
+#endif
+           AcornZ80 || ArmTube) )
         return;
 
     if (DebugEnabled) {
@@ -1464,12 +1470,13 @@ void Exec65C02Instruction(void) {
 
   // Output debug info
   if (DebugEnabled)
-    DebugDisassembler(TubeProgramCounter,Accumulator,XReg,YReg,PSR,StackReg,false);
+    DebugDisassembler(TubeProgramCounter,PreTPC,Accumulator,XReg,YReg,PSR,StackReg,false);
 
   // For the Master, check Shadow Ram Presence
   // Note, this has to be done BEFORE reading an instruction due to Bit E and the PC
   /* Read an instruction and post inc program couter */
   OldPC=TubeProgramCounter;
+  PreTPC=TubeProgramCounter;
   CurrentInstruction=TubeRam[TubeProgramCounter++];
   // cout << "Fetch at " << hex << (TubeProgramCounter-1) << " giving 0x" << CurrentInstruction << dec << "\n";
   TubeCycles=TubeCyclesTable[CurrentInstruction];
@@ -2486,26 +2493,22 @@ void SyncTubeProcessor(void) {
 /*-------------------------------------------------------------------------*/
 void DebugTubeState(void)
 {
-    char info[200];
-
     DebugDisplayInfo("");
 
-    sprintf(info, "HostTube: R1=%02X R2=%02X R3=%02X R4=%02X R1n=%02X R3n=%02X",
+    DebugDisplayInfoF("HostTube: R1=%02X R2=%02X R3=%02X R4=%02X R1n=%02X R3n=%02X",
         (int)R1HStatus | R1Status,
         (int)R2HStatus,
         (int)R3HStatus,
         (int)R4HStatus,
         (int)R1PHPtr,
         (int)R3PHPtr);
-    DebugDisplayInfo(info);
 
-    sprintf(info, "ParaTube: R1=%02X R2=%02X R3=%02X R4=%02X R3n=%02X",
+    DebugDisplayInfoF("ParaTube: R1=%02X R2=%02X R3=%02X R4=%02X R3n=%02X",
         (int)R1PStatus | R1Status,
         (int)R2PStatus,
         (int)R3PStatus,
         (int)R4PStatus,
         (int)R3HPPtr);
-    DebugDisplayInfo(info);
 }
 
 /*-------------------------------------------------------------------------*/

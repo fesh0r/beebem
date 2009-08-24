@@ -1,26 +1,24 @@
-/****************************************************************************/
-/*              Beebem - (c) David Alan Gilbert 1994                        */
-/*              ------------------------------------                        */
-/* This program may be distributed freely within the following restrictions:*/
-/*                                                                          */
-/* 1) You may not charge for this program or for any part of it.            */
-/* 2) This copyright message must be distributed with all copies.           */
-/* 3) This program must be distributed complete with source code.  Binary   */
-/*    only distribution is not permitted.                                   */
-/* 4) The author offers no warrenties, or guarentees etc. - you use it at   */
-/*    your own risk.  If it messes something up or destroys your computer   */
-/*    thats YOUR problem.                                                   */
-/* 5) You may use small sections of code from this program in your own      */
-/*    applications - but you must acknowledge its use.  If you plan to use  */
-/*    large sections then please ask the author.                            */
-/*                                                                          */
-/* If you do not agree with any of the above then please do not use this    */
-/* program.                                                                 */
-/* Please report any problems to the author at beebem@treblig.org           */
-/****************************************************************************/
-/* 6502 core - 6502 emulator core - David Alan Gilbert 16/10/94 */
+/****************************************************************
+BeebEm - BBC Micro and Master 128 Emulator
+Copyright (C) 1994  David Alan Gilbert
+Copyright (C) 1997  Mike Wyatt
+Copyright (C) 2001  Richard Gellman
 
-/* Mike Wyatt 7/6/97 - Added undocumented instructions */
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public
+License along with this program; if not, write to the Free
+Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+Boston, MA  02110-1301, USA.
+****************************************************************/
 
 #ifdef WIN32
 #include <windows.h>
@@ -88,15 +86,6 @@ unsigned char NMIStatus=0; /* bit set (nums in NMI_Nums) if NMI being caused */
 unsigned int NMILock=0; /* Well I think NMI's are maskable - to stop repeated NMI's - the lock is released when an RTI is done */
 typedef int int16;
 INLINE static void SBCInstrHandler(int16 operand);
-enum PSRFlags {
-  FlagC=1,
-  FlagZ=2,
-  FlagI=4,
-  FlagD=8,
-  FlagB=16,
-  FlagV=64,
-  FlagN=128
-};
 
 /* Note how GETCFLAG is special since being bit 0 we don't need to test it to get a clean 0/1 */
 #define GETCFLAG ((PSR & FlagC))
@@ -489,6 +478,12 @@ INLINE static void BITInstrHandler(int16 operand) {
   /* z if result 0, and NV to top bits of operand */
   PSR|=(((Accumulator & operand)==0)<<1) | (operand & 192);
 } /* BITInstrHandler */
+
+INLINE static void BITImmedInstrHandler(int16 operand) {
+  PSR&=~FlagZ;
+  /* z if result 0, and NV to top bits of operand */
+  PSR|=(((Accumulator & operand)==0)<<1);
+} /* BITImmedInstrHandler */
 
 INLINE static void BMIInstrHandler(void) {
   if (GETNFLAG) {
@@ -1158,7 +1153,7 @@ void Exec6502Instruction(void) {
     loopc=(DebugEnabled ? 1 : 1024); // Makes debug window more responsive
     for(loop=0;loop<loopc;loop++) {
         /* Output debug info */
-        if (DebugEnabled && !DebugDisassembler(ProgramCounter,Accumulator,XReg,YReg,PSR,StackReg,true))
+        if (DebugEnabled && !DebugDisassembler(ProgramCounter,PrePC,Accumulator,XReg,YReg,PSR,StackReg,true))
         {
             Sleep(10);  // Ease up on CPU when halted
             continue;
@@ -1176,8 +1171,10 @@ void Exec6502Instruction(void) {
             arm->exec(4);
         }
 
+#ifdef M512COPRO_ENABLED
         if (Tube186Enabled)
             i186_execute(12 * 4);
+#endif
 
         Branched=0;
         iFlagJustCleared=false;
@@ -1550,7 +1547,7 @@ void Exec6502Instruction(void) {
                 PSR|=((YReg==0)<<1) | (YReg & 128);
                 break;
             case 0x89: /* BIT Immediate */
-                if (MachineType==3) BITInstrHandler(ReadPaged(ProgramCounter++));
+                if (MachineType==3) BITImmedInstrHandler(ReadPaged(ProgramCounter++));
                 break;
             case 0x8a:
                 Accumulator=XReg; /* TXA */
@@ -2313,6 +2310,7 @@ void PollHardware(unsigned int nCycles)
         AdjustTrigger(TapeTrigger);
         AdjustTrigger(EconetTrigger);
         AdjustTrigger(EconetFlagFillTimeoutTrigger);
+        AdjustTrigger(IP232RxTrigger);
         if (EnableTube)
             WrapTubeCycles();
     }

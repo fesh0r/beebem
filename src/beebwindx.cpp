@@ -1,3 +1,23 @@
+/****************************************************************
+BeebEm - BBC Micro and Master 128 Emulator
+Copyright (C) 1998  Mike Wyatt
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public
+License along with this program; if not, write to the Free
+Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+Boston, MA  02110-1301, USA.
+****************************************************************/
+
 // BeebWin DirectX and display rendering support
 
 #include <stdio.h>
@@ -44,14 +64,16 @@ void BeebWin::InitDX(void)
             UpdateDisplayRendererMenu();
         }
     }
+
+    m_CurrentDisplayRenderer = m_DisplayRenderer;
 }
 void BeebWin::ResetDX(void)
 {
-    if (m_DisplayRenderer == IDM_DISPDX9)
+    if (m_CurrentDisplayRenderer == IDM_DISPDX9)
     {
         ExitDX9();
     }
-    else
+    else if (m_CurrentDisplayRenderer == IDM_DISPDDRAW)
     {
         ResetSurfaces();
     }
@@ -67,7 +89,7 @@ void BeebWin::ReinitDX(void)
     {
         hr = InitDX9();
     }
-    else
+    else if (m_DisplayRenderer == IDM_DISPDDRAW)
     {
         hr = InitSurfaces();
     }
@@ -80,14 +102,16 @@ void BeebWin::ReinitDX(void)
         m_DisplayRenderer = IDM_DISPGDI;
         UpdateDisplayRendererMenu();
     }
+
+    m_CurrentDisplayRenderer = m_DisplayRenderer;
 }
 void BeebWin::ExitDX(void)
 {
-    if (m_DisplayRenderer == IDM_DISPDX9)
+    if (m_CurrentDisplayRenderer == IDM_DISPDX9)
     {
         ExitDX9();
     }
-    else
+    else if (m_CurrentDisplayRenderer == IDM_DISPDDRAW)
     {
         ResetSurfaces();
         if (m_DD2)
@@ -168,7 +192,7 @@ HRESULT BeebWin::InitSurfaces(void)
         ddsd.dwSize = sizeof(ddsd);
         ddsd.dwFlags = DDSD_CAPS | DDSD_HEIGHT | DDSD_WIDTH;
         ddsd.ddsCaps.dwCaps = DDSCAPS_OFFSCREENPLAIN;
-        if (m_DXSmoothing)
+        if (m_DXSmoothing && (!m_DXSmoothMode7Only || TeletextEnabled))
             ddsd.ddsCaps.dwCaps |= DDSCAPS_VIDEOMEMORY;
         else
             ddsd.ddsCaps.dwCaps |= DDSCAPS_SYSTEMMEMORY;
@@ -271,7 +295,7 @@ HRESULT BeebWin::InitDX9(void)
         // Turn off D3D lighting
         m_pd3dDevice->SetRenderState( D3DRS_LIGHTING, FALSE );
 
-        if (m_DXSmoothing)
+        if (m_DXSmoothing && (!m_DXSmoothMode7Only || TeletextEnabled))
         {
             // Turn on bilinear interpolation so image is smoothed
             m_pd3dDevice->SetSamplerState( 0, D3DSAMP_MINFILTER, D3DTEXF_LINEAR );
@@ -452,6 +476,7 @@ void BeebWin::RenderDX9(void)
 /****************************************************************************/
 void BeebWin::updateLines(HDC hDC, int starty, int nlines)
 {
+    static unsigned char LastTeletextEnabled = 255;
     WINDOWPLACEMENT wndpl;
     HRESULT ddrval;
     HDC hdc;
@@ -470,6 +495,14 @@ void BeebWin::updateLines(HDC hDC, int starty, int nlines)
         return;
     }
 
+    // Changed to/from teletext mode?
+    if (LastTeletextEnabled != TeletextEnabled)
+    {
+        if (m_DXSmoothing && m_DXSmoothMode7Only)
+            UpdateSmoothing();
+        LastTeletextEnabled = TeletextEnabled;
+    }
+
     // Use last stored params?
     if (starty == 0 && nlines == 0)
     {
@@ -483,7 +516,7 @@ void BeebWin::updateLines(HDC hDC, int starty, int nlines)
     }
 
     ++m_ScreenRefreshCount;
-    TTLines=500/TeletextStyle + (ShowCursorLine ? 2 : 0);
+    TTLines=500/TeletextStyle;
 
     // Do motion blur
     if (m_MotionBlur != IDM_BLUR_OFF)
@@ -641,6 +674,13 @@ void BeebWin::updateLines(HDC hDC, int starty, int nlines)
             aviWriter = NULL;
         }
     }
+
+    if (m_CaptureBitmapPending)
+    {
+        CaptureBitmap(0, starty, (TeletextEnabled)?552:ActualScreenWidth,
+                      (TeletextEnabled==1)?TTLines:nlines);
+        m_CaptureBitmapPending = false;
+    }
 }
 
 /****************************************************************************/
@@ -675,5 +715,56 @@ void BeebWin::DisplayTiming(void)
         sprintf(m_szTitle, "%s  Speed: %2.2f  fps: %2d",
                 WindowTitle, m_RelativeSpeed, (int)m_FramesPerSecond);
         SetWindowText(m_hWnd, m_szTitle);
+    }
+}
+
+/****************************************************************************/
+void BeebWin::UpdateSmoothing(void)
+{
+    DDSURFACEDESC ddsd;
+    HRESULT ddrval;
+
+    if (m_DisplayRenderer == IDM_DISPDX9)
+    {
+        if (m_DXSmoothing && (!m_DXSmoothMode7Only || TeletextEnabled))
+        {
+            // Turn on bilinear interpolation so image is smoothed
+            m_pd3dDevice->SetSamplerState( 0, D3DSAMP_MINFILTER, D3DTEXF_LINEAR );
+            m_pd3dDevice->SetSamplerState( 0, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR );
+        }
+        else
+        {
+            // Turn off bilinear interpolation
+            m_pd3dDevice->SetSamplerState( 0, D3DSAMP_MINFILTER, D3DTEXF_POINT );
+            m_pd3dDevice->SetSamplerState( 0, D3DSAMP_MAGFILTER, D3DTEXF_POINT );
+        }
+    }
+    else
+    {
+        if (m_DDS2One)
+        {
+            m_DDS2One->Release();
+            m_DDS2One = NULL;
+        }
+        if (m_DDSOne)
+        {
+            m_DDSOne->Release();
+            m_DDSOne = NULL;
+        }
+        ZeroMemory(&ddsd, sizeof(ddsd));
+        ddsd.dwSize = sizeof(ddsd);
+        ddsd.dwFlags = DDSD_CAPS | DDSD_HEIGHT | DDSD_WIDTH;
+        ddsd.ddsCaps.dwCaps = DDSCAPS_OFFSCREENPLAIN;
+        if (m_DXSmoothing && (!m_DXSmoothMode7Only || TeletextEnabled))
+            ddsd.ddsCaps.dwCaps |= DDSCAPS_VIDEOMEMORY;
+        else
+            ddsd.ddsCaps.dwCaps |= DDSCAPS_SYSTEMMEMORY;
+        ddsd.dwWidth = 800;
+        ddsd.dwHeight = 512;
+        ddrval = m_DD2->CreateSurface(&ddsd, &m_DDSOne, NULL);
+        if( ddrval == DD_OK )
+        {
+            ddrval = m_DDSOne->QueryInterface(IID_IDirectDrawSurface2, (LPVOID *)&m_DDS2One);
+        }
     }
 }

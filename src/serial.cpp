@@ -1,27 +1,28 @@
+/****************************************************************
+BeebEm - BBC Micro and Master 128 Emulator
+Copyright (C) 2001  Richard Gellman
+Copyright (C) 2004  Mike Wyatt
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public
+License along with this program; if not, write to the Free
+Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+Boston, MA  02110-1301, USA.
+****************************************************************/
+
 /*
 Serial/Cassette Support for BeebEm
-
 Written by Richard Gellman - March 2001
-
-You may not distribute this entire file separate from the whole BeebEm distribution.
-
-You may use sections or all of this code for your own uses, provided that:
-
-1) It is not a separate file in itself.
-2) This copyright message is included
-3) Acknowledgement is made to the author, and any aubsequent authors of additional code.
-
-The code may be modified as required, and freely distributed as such authors see fit,
-provided that:
-
-1) Acknowledgement is made to the author, and any subsequent authors of additional code
-2) Indication is made of modification.
-
-Absolutely no warranties/guarantees are made by using this code. You use and/or run this code
-at your own risk. The code is classed by the author as "unlikely to cause problems as far as
-can be determined under normal use".
-
--- end of legal crap - Richard Gellman :) */
+*/
 
 // P.S. If anybody knows how to emulate this, do tell me - 16/03/2001 - Richard Gellman
 
@@ -168,7 +169,7 @@ void Write_ACIA_Control(unsigned char CReg) {
         SetACIAStatus(7);
     }
     // Change serial port settings
-    if ((SerialChannel==RS423) && (SerialPortEnabled) && (!TouchScreenEnabled)) {
+    if ((SerialChannel==RS423) && (SerialPortEnabled) && (!TouchScreenEnabled) && (!EthernetPortEnabled)) {
         GetCommState(hSerialPort,&dcbSerialPort);
         dcbSerialPort.ByteSize=Data_Bits;
         dcbSerialPort.StopBits=(Stop_Bits==1)?ONESTOPBIT:TWOSTOPBITS;
@@ -215,10 +216,19 @@ void Write_ACIA_Tx_Data(unsigned char Data) {
             {
                 TouchScreenWrite(Data);
             }
-            else
-            {
-                WriteFile(hSerialPort,&SerialWriteBuffer,1,&BytesOut,&olSerialWrite);
-            }
+            else if (EthernetPortEnabled)
+                {
+//                  if (Data_Bits==7) {
+//                      IP232Write(Data & 127 );
+//                  } else {
+                        IP232Write(Data );
+                        if (!IP232raw && Data == 255) IP232Write(Data);
+//                  }
+                }
+                else
+                {
+                    WriteFile(hSerialPort,&SerialWriteBuffer,1,&BytesOut,&olSerialWrite);
+                }
 
             SetACIAStatus(1);
         }
@@ -544,6 +554,14 @@ void Serial_Poll(void)
                     HandleData(TouchScreenRead());
             }
         }
+        else if (EthernetPortEnabled)
+        {
+            if (IP232Poll() == true)
+            {
+                if (RxD<2)
+                    HandleData(IP232Read());
+            }
+        }
         else
         {
             if  ((!bWaitingForStat) && (!bSerialStateChanged)) {
@@ -561,8 +579,8 @@ void Serial_Poll(void)
                     if (BytesIn>0) {
                         HandleData((unsigned char)SerialBuffer);
                     } else {
-                     ClearCommError(hSerialPort, &dwClrCommError,NULL);
-                     bCharReady=FALSE;
+                        ClearCommError(hSerialPort, &dwClrCommError,NULL);
+                        bCharReady=FALSE;
                     }
                 }
             }
@@ -574,7 +592,7 @@ void InitThreads(void) {
     if (hSerialPort) { CloseHandle(hSerialPort); hSerialPort=NULL; }
     bWaitingForData=FALSE;
     bWaitingForStat=FALSE;
-    if ( (SerialPortEnabled) && (!TouchScreenEnabled) ) {
+    if ( (SerialPortEnabled) && (SerialPort > 0)) {
         InitSerialPort(); // Set up the serial port if its enabled.
         if (olSerialPort.hEvent) { CloseHandle(olSerialPort.hEvent); olSerialPort.hEvent=NULL; }
         olSerialPort.hEvent=CreateEvent(NULL,TRUE,FALSE,NULL); // Create the serial port event signal
@@ -589,7 +607,7 @@ void InitThreads(void) {
 void StatThread(void *lpParam) {
     DWORD dwOvRes=0;
     do {
-        if ((!TouchScreenEnabled) &&
+        if ((!TouchScreenEnabled) && (!EthernetPortEnabled) &&
             (WaitForSingleObject(olStatus.hEvent,10)==WAIT_OBJECT_0) && (SerialPortEnabled) ) {
             if (GetOverlappedResult(hSerialPort,&olStatus,&dwOvRes,FALSE)) {
                 // Event waiting in dwCommEvent
@@ -624,7 +642,7 @@ void SerialThread(void *lpParam) {
     // enable status, and doing the monitoring.
     DWORD spResult;
     do {
-        if ((!bSerialStateChanged) && (SerialPortEnabled) && (!TouchScreenEnabled) && (bWaitingForData)) {
+        if ((!bSerialStateChanged) && (SerialPortEnabled) && (!TouchScreenEnabled) && (!EthernetPortEnabled) && (bWaitingForData)) {
             spResult=WaitForSingleObject(olSerialPort.hEvent,INFINITE); // 10ms to respond
             if (spResult==WAIT_OBJECT_0) {
                 if (GetOverlappedResult(hSerialPort,&olSerialPort,&BytesIn,FALSE)) {
@@ -649,7 +667,7 @@ void SerialThread(void *lpParam) {
 void InitSerialPort(void) {
     BOOL bPortStat;
     // Initialise COM port
-    if ( (SerialPortEnabled) && (!TouchScreenEnabled) ) {
+    if ( (SerialPortEnabled) && (SerialPort > 0 ) ) {
         if (SerialPort==1) pnSerialPort="Com1";
         if (SerialPort==2) pnSerialPort="Com2";
         if (SerialPort==3) pnSerialPort="Com3";
@@ -657,6 +675,9 @@ void InitSerialPort(void) {
         hSerialPort=CreateFile(pnSerialPort,GENERIC_READ|GENERIC_WRITE,0,0,OPEN_EXISTING,FILE_FLAG_OVERLAPPED,0);
         if (hSerialPort==INVALID_HANDLE_VALUE) {
             MessageBox(GETHWND,"Could not open specified serial port",WindowTitle,MB_OK|MB_ICONERROR);
+            bSerialStateChanged=TRUE;
+            SerialPortEnabled=FALSE;
+            mainWin->ExternUpdateSerialMenu();
         }
         else {
             bPortStat=SetupComm(hSerialPort, 1280, 1280);
