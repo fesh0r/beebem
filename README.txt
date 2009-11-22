@@ -114,20 +114,19 @@ Although most games software is supplied on disc images there is a large
 selection of ROM software available for the BBC Micro.  There are
 application ROMs such as word processors and drawing packages, there are
 programing language ROMs such as FORTH and BCPL, and a whole range of other
-software.  The BBC Micro's operating system, BASIC language and disc filing
+software.  The BBC Micro operating system, BASIC language and disc filing
 system are all supplied on ROM.
 
-The BBC Micro and Master 128 (and BeebEm) support up to 16 ROM slots (plus
-one for the operating system).  The BBC Micro ROMs are kept in
-subdirectories of the 'BeebFile' directory.  The is one subdirectory for
-each of the four models emulated.
+The BBC Micro and Master 128 (and BeebEm) support up to 16 ROM slots plus
+one for the operating system.  The BBC Micro ROMs are kept in subdirectories
+of the 'BeebFile' directory.  The is one subdirectory for each of the four
+models emulated.
 
 The ROMs that BeebEm loads are configured in the 'Roms.cfg' file.  You can
-edit this file using Notepad to add a ROM.  Change one of the 'EMPTY' lines
-to the name of the ROM file you have put one of the BeebFile directories.
-The first 17 lines in Roms.cfg are for the BBC Micro Model B emulation, the
-second 17 are for the IntegraB emulation, the third for the B Plus emulation
-and the last 17 for the Master 128 emulation.
+edit the ROM configuration within BeebEm using the "Edit ROM Configuration"
+option on the Hardware menu.  Note that you usually have to press the Break
+key (F12) before a new ROM configuration is recognised.  Changes to the ROM
+configuration can be saved to the Roms.cfg file or another file.
 
 To run a ROM you will need to type a command into BeebEm.  The exact command
 will depend on the ROM itself and you may need to refer to any documentation
@@ -138,6 +137,11 @@ Any of the 16 ROM slots can be configured as RAM.  Some software
 (e.g. games) can make use of this RAM so its a good idea to leave at least
 one slot as RAM.
 
+ROMs are not normally writable but some ROM software was supplied on small
+expansion boards that had some RAM on them.  These ROMs should be marked as
+writable in the Roms.cfg file (use the "Make Writable" option in ROM
+configuration).
+
 Note that certain ROMs must be present for each emulation mode to work so do
 not remove these:
 
@@ -147,8 +151,9 @@ not remove these:
  Master 128           - MOS.ROM, TERMINAL.ROM, BASIC4.ROM, DFS.ROM
 
 The default set of ROMs configured for the Master 128 mode are MOS 3.20.
-The MOS 3.50 ROMs are also included.  To use them rename the BeebFile/M128
-directory to M128-MOS3.2 and rename the M128-MOS3.5 directory M128.
+The MOS 3.50 ROMs are also included.  To use them either rename the
+BeebFile/M128 directory to M128-MOS3.2 and rename the M128-MOS3.5 directory
+M128 or create a new configuration using the ROM Configuration option.
 
 
 Keyboard Mappings
@@ -277,7 +282,7 @@ mount it.  You can also press A & F12 to mount an ADFS disc.
 
 ADFS is also supported in Model B and B Plus modes.  Note that in Model B
 mode you will need to select the Acorn 1770 disc controller and add
-ADFS-1.30.rom to Roms.cfg.
+ADFS-1.30.rom to the ROM configuration.
 
 You can find out more information about using discs by reading the DFS (Disc
 Filing System) guides available on the internet.
@@ -318,12 +323,12 @@ SCSI & SASI Disk Support
 
 BeebEm supports emulated SCSI and SASI hard disks.  There are 4 10MB
 pre-formatted ADFS SCSI disk images in the discims directory (the scsi?.dat
-files).  The disks can be used in Model B (need to add ADFS-1.30.rom to
-Roms.cfg), B Plus or Master 128 mode.  To use the disk images enable hard
-drive emulation on the hardware menu and press A & F12 to boot in ADFS mode
-(ignore the error for drive 4 if in Master mode).  The hard disks then
-appear as drives 0 to 3.  Floppy disks can still be accessed as drives 4 and
-5.
+files).  The disks can be used in Model B (need to add ADFS-1.30.rom to the
+ROM configuration), B Plus or Master 128 mode.  To use the disk images
+enable hard drive emulation on the hardware menu and press A & F12 to boot
+in ADFS mode (ignore the error for drive 4 if in Master mode).  The hard
+disks then appear as drives 0 to 3.  Floppy disks can still be accessed as
+drives 4 and 5.
 
 There are some demo tunes in scsi0.dat which you can listen to with the PLAY
 program.
@@ -547,8 +552,8 @@ some sample teletext data from :
 
 http://www.g7jjf.com/teletext.htm
 
-You will need to add the ATS-3.0-1.rom to Roms.cfg and enable Teletext
-emulation on the hardware menu to get Teletext to work.
+You will need to add the ATS-3.0-1.rom to the ROM configuration and enable
+Teletext emulation on the hardware menu to get Teletext to work.
 
 
 Speech Generator
@@ -580,9 +585,9 @@ pre-existing connection.  This handles the handshake lines if you enable
 ip232 mode, so dropping RTS will drop an outward connection.  Similarly DCD
 going up will be passed through to CTS.
 
-Add the Commstar.rom to your Roms.cfg file (see "ROM Software" above) and
-start up BeebEm.  On the Comms menu select the "IP: localhost:25232" and
-"RS432 On/Off".  Type *COMMSTAR to start CommStar.  In Commstar:
+Add the Commstar.rom to your ROM configuration (see "ROM Software" above)
+and start up BeebEm.  On the Comms menu select the "IP: localhost:25232"
+and "RS432 On/Off".  Type *COMMSTAR to start CommStar.  In Commstar:
   - Press M to switch to mode 0
   - Press A to turn off Auto line feed
   - Press I and then R a few times to set the receive baud to 9600
@@ -658,11 +663,8 @@ File Menu:
   Reset        - "Power-On" reset for when a game crashes.
 
   Load State   - Load or save the state of BeebEm.  This is useful for
-  Save State     saving your position in a game for example.  Note that ROM
-                 data is not saved so if you have changed the ROMs that are
-                 loaded when BeebEm starts (in Roms.cfg) then a restored
-                 state may not work.  State files are put in the 'BeebState'
-                 directory by default.
+  Save State     saving your position in a game for example.  State files
+                 are put in the 'BeebState' directory by default.
 
   Quick Load   - Quickly load or save BeebEm state without having to
   Quick Save     specify the filename.  The state is saved and loaded from
@@ -871,11 +873,19 @@ Hardware Menu:
                         emulation.  See the README_Z80.TXT file for more
                         details.
 
-  Allow ROM writes    - Enable/disable ROM writes for each ROM slot.
-                        ROMs read at start-up are write protected by
-                        default.  Some ROM software was supplied on
-                        small expansion boards that had some RAM on them.
-                        These ROMs require write access in order to work.
+  Allow SW RAM Write  - Enable/disable writes for each sideways RAM slot.
+                        See the "ROM Software" section above.
+
+  SW RAM Board On/Off - Enables Solidisk SW RAM board emulation.  The RAM
+                        bank that is enabled for writing is selected via the
+                        User VIA port B.  Set port B bits 0-3 to output
+                        (e.g. ?&FE62=15) and select the bank via port B
+                        (e.g. ?&FE60=4).
+
+  Edit ROM Configuration - Allow you to edit the ROM configuration.
+                        Note that you will usually have to press the
+                        Break key (F12) before a new ROM configuration
+                        is recognised.
 
   Ignore Illegal Instructions - When disabled a dialog appears detailing
                                 the opcode and program counter.

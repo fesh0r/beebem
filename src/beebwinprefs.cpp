@@ -415,6 +415,15 @@ void BeebWin::LoadPreferences()
         SpeechDefault=flag;
 #endif
 
+    if (!PrefsGetBinaryValue("SWRAMWritable",RomWritePrefs,16))
+    {
+        for (int slot = 0; slot < 16; ++slot)
+            RomWritePrefs[slot] = 1;
+    }
+
+    if (!PrefsGetBinaryValue("SWRAMBoard",&SWRAMBoardEnabled,1))
+        SWRAMBoardEnabled=0;
+
     if (!PrefsGetBinaryValue("ArmTube",&ArmTube,1))
         ArmTube=0;
 
@@ -547,7 +556,7 @@ void BeebWin::LoadPreferences()
     }
 
     // Update prefs version
-    PrefsSetStringValue("PrefsVersion", "1.6");
+    PrefsSetStringValue("PrefsVersion", "1.7");
 
     // Windows key enable/disable still comes from registry
     int binsize = 24;
@@ -655,7 +664,6 @@ void BeebWin::SavePreferences(bool saveAll)
         PrefsSetDWORDValue("IP232customport", dword);
         PrefsSetStringValue("IP232customip", m_customip);
 
-
         PrefsSetBinaryValue("SerialPort",&SerialPort,1);
 
         PrefsSetBinaryValue("EconetEnabled",&EconetEnabled,1); //Rob
@@ -663,6 +671,11 @@ void BeebWin::SavePreferences(bool saveAll)
         flag=SpeechDefault;
         PrefsSetBinaryValue("SpeechEnabled",&flag,1);
 #endif
+
+        for (int slot = 0; slot < 16; ++slot)
+            RomWritePrefs[slot] = RomWritable[slot];
+        PrefsSetBinaryValue("SWRAMWritable",RomWritePrefs,16);
+        PrefsSetBinaryValue("SWRAMBoard",&SWRAMBoardEnabled,1);
 
         PrefsSetBinaryValue("ArmTube",&ArmTube,1);
         PrefsSetBinaryValue("TorchTube",&TorchTube,1);

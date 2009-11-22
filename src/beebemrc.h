@@ -106,6 +106,7 @@ Boston, MA  02110-1301, USA.
 #define IDD_BREAKOUT                    113
 #define IDD_DISCEXPORT                  114
 #define IDR_ACCELERATORS                115
+#define IDD_ROMCONFIG                   116
 #define IDC_DEBUGBREAK                  1010
 #define IDC_DEBUGINFO                   1015
 #define IDC_DEBUGCOMMAND                1016
@@ -168,6 +169,18 @@ Boston, MA  02110-1301, USA.
 #define IDC_WATCHENDIAN                 1072
 #define IDC_DEBUGBRK                    1073
 #define IDC_DEBUGGRP                    1074
+#define IDC_BBCB                        1075
+#define IDC_INTEGRAB                    1076
+#define IDC_BBCBPLUS                    1077
+#define IDC_MASTER128                   1078
+#define IDC_MODEL                       1079
+#define IDC_ROMLIST                     1080
+#define IDC_SELECTROM                   1081
+#define IDC_MARKWRITABLE                1082
+#define IDC_RAM                         1083
+#define IDC_EMPTY                       1084
+#define IDC_SAVE                        1085
+#define IDC_LOAD                        1086
 #define IDM_ABOUT                       40001
 #define IDM_DISC                        40002
 #define IDM_LOADDISC0                   40002
@@ -407,6 +420,8 @@ Boston, MA  02110-1301, USA.
 #define ID_RS423DESTINATION_IP          40273
 #define ID_IP232RAW                     40274
 #define ID_IP232RW                      40275
+#define IDM_SWRAMBOARD                  40276
+#define IDM_ROMCONFIG                   40277
 
 #define IDC_STATIC                      -1
 
@@ -415,9 +430,9 @@ Boston, MA  02110-1301, USA.
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NO_MFC                     1
-#define _APS_NEXT_RESOURCE_VALUE        116
-#define _APS_NEXT_COMMAND_VALUE         40276
-#define _APS_NEXT_CONTROL_VALUE         1075
+#define _APS_NEXT_RESOURCE_VALUE        117
+#define _APS_NEXT_COMMAND_VALUE         40278
+#define _APS_NEXT_CONTROL_VALUE         1087
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

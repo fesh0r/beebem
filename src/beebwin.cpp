@@ -111,7 +111,7 @@ static const char *AboutText =
     "Master 512 Second Processor\n"
 #endif
     "ARM Second Processor\n\n"
-    "Version " VERSION_STRING ", Aug 2009";
+    "Version " VERSION_STRING ", Nov 2009";
 
 /* Prototypes */
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
@@ -187,6 +187,9 @@ BeebWin::BeebWin()
     m_CurrentDisplayRenderer = 0;
     m_DXSmoothing = true;
     m_DXSmoothMode7Only = false;
+    m_JoystickCaptured = false;
+    m_customip[0] = 0;
+    m_customport = 0;
 
     /* Get the applications path - used for non-user files */
     char app_path[_MAX_PATH];
@@ -229,6 +232,12 @@ void BeebWin::Initialise()
     if (FAILED(CoInitialize(NULL)))
         MessageBox(m_hWnd,"Failed to initialise COM\n",WindowTitle,MB_OK|MB_ICONERROR);
 
+    // Init Windows controls
+    INITCOMMONCONTROLSEX cc;
+    cc.dwSize = sizeof(cc);
+    cc.dwICC = ICC_LISTVIEW_CLASSES;
+    InitCommonControlsEx(&cc);
+
     GdiplusStartupInput gdiplusStartupInput;
     GdiplusStartup(&m_gdiplusToken, &gdiplusStartupInput, NULL);
 
@@ -239,6 +248,7 @@ void BeebWin::Initialise()
     m_hMenu = GetMenu(m_hWnd);
     m_hDC = GetDC(m_hWnd);
 
+    ReadROMFile(RomFile, RomConfig);
     ApplyPrefs();
 
     if(strcmp(m_DebugScript,"\0") != 0)
@@ -331,6 +341,14 @@ void BeebWin::ApplyPrefs()
     }
 
     ResetBeebSystem(MachineType,TubeEnabled,1);
+
+    // Rom write flags
+    for (int slot = 0; slot < 16; ++slot)
+    {
+        if (!RomWritePrefs[slot])
+            RomWritable[slot] = 0;
+    }
+    SetRomMenu();
 }
 
 /****************************************************************************/
@@ -420,7 +438,7 @@ void BeebWin::ResetBeebSystem(unsigned char NewModelType,unsigned char TubeStatu
     Disc8271_reset();
     if (EconetEnabled) EconetReset();   //Rob:
     Reset1770();
-    AtoDReset();
+    AtoDInit();
     SetRomMenu();
     FreeDiscImage(0);
     // Keep the disc images loaded
@@ -817,6 +835,7 @@ void BeebWin::InitMenu(void)
     CheckMenuItem(m_hMenu, IDM_ACORNZ80, (AcornZ80)?MF_CHECKED:MF_UNCHECKED);
     CheckMenuItem(m_hMenu, IDM_ARM, (ArmTube)?MF_CHECKED:MF_UNCHECKED);
     SetRomMenu();
+    CheckMenuItem(hMenu, IDM_SWRAMBOARD, SWRAMBoardEnabled ? MF_CHECKED : MF_UNCHECKED);
     CheckMenuItem(hMenu, IDM_IGNOREILLEGALOPS, IgnoreIllegalInstructions ? MF_CHECKED : MF_UNCHECKED);
     UpdateOptiMenu();
     UpdateEconetMenu(hMenu);
@@ -904,7 +923,12 @@ void BeebWin::SetRomMenu(void)
         ReadRomTitle( i, &Title[3], sizeof( Title )-4);
 
         if ( Title[3]== '\0' )
-            strcpy( &Title[3], "Empty" );
+        {
+            if (RomBankType[i]==BankRam)
+                strcpy( &Title[3], "RAM" );
+            else
+                strcpy( &Title[3], "Empty" );
+        }
 
         ModifyMenu( hMenu,  // handle of menu
                     IDM_ALLOWWRITES_ROM0 + i,
@@ -914,34 +938,32 @@ void BeebWin::SetRomMenu(void)
                     Title       // menu item content
                     );
 
-        /* LRW Now uncheck the Roms which are NOT writable, that have already been loaded. */
-        CheckMenuItem(hMenu, IDM_ALLOWWRITES_ROM0 + i, RomWritable[i] ? MF_CHECKED : MF_UNCHECKED );
+        /* Disable ROM and uncheck the Rom/RAM which are NOT writable */
+        EnableMenuItem(hMenu, IDM_ALLOWWRITES_ROM0 + i,
+                       (RomBankType[i]==BankRam) ? MF_ENABLED : MF_GRAYED);
+        CheckMenuItem(hMenu, IDM_ALLOWWRITES_ROM0 + i,
+                      (RomBankType[i]==BankRam) ? (RomWritable[i] ? MF_CHECKED : MF_UNCHECKED) : MF_UNCHECKED);
     }
-}
-
-/****************************************************************************/
-void BeebWin::GetRomMenu(void)
-{
-    HMENU hMenu = m_hMenu;
-
-    for (int i=0; i<16; ++i)
-      /* LRW Now uncheck the Roms as NOT writable, that have already been loaded. */
-      RomWritable[i] = ( GetMenuState(hMenu, IDM_ALLOWWRITES_ROM0 + i, MF_BYCOMMAND ) & MF_CHECKED );
 }
 
 /****************************************************************************/
 void BeebWin::InitJoystick(void)
 {
-    MMRESULT mmresult;
+    MMRESULT mmresult = JOYERR_NOERROR;
 
-    /* Get joystick updates 10 times a second */
-    mmresult = joySetCapture(m_hWnd, JOYSTICKID1, 100, FALSE);
-    if (mmresult == JOYERR_NOERROR)
-        mmresult = joyGetDevCaps(JOYSTICKID1, &m_JoystickCaps, sizeof(JOYCAPS));
+    if (!m_JoystickCaptured)
+    {
+        /* Get joystick updates 10 times a second */
+        mmresult = joySetCapture(m_hWnd, JOYSTICKID1, 100, FALSE);
+        if (mmresult == JOYERR_NOERROR)
+            mmresult = joyGetDevCaps(JOYSTICKID1, &m_JoystickCaps, sizeof(JOYCAPS));
+        if (mmresult == JOYERR_NOERROR)
+            m_JoystickCaptured = true;
+    }
 
     if (mmresult == JOYERR_NOERROR)
     {
-        AtoDInit();
+        AtoDEnable();
     }
     else if (mmresult == JOYERR_UNPLUGGED)
     {
@@ -958,18 +980,23 @@ void BeebWin::InitJoystick(void)
 /****************************************************************************/
 void BeebWin::ScaleJoystick(unsigned int x, unsigned int y)
 {
-    /* Scale and reverse the readings */
-    JoystickX = (int)((double)(m_JoystickCaps.wXmax - x) * 65535.0 /
-                        (double)(m_JoystickCaps.wXmax - m_JoystickCaps.wXmin));
-    JoystickY = (int)((double)(m_JoystickCaps.wYmax - y) * 65535.0 /
-                        (double)(m_JoystickCaps.wYmax - m_JoystickCaps.wYmin));
+    if (m_MenuIdSticks == IDM_JOYSTICK)
+    {
+        /* Scale and reverse the readings */
+        JoystickX = (int)((double)(m_JoystickCaps.wXmax - x) * 65535.0 /
+                          (double)(m_JoystickCaps.wXmax - m_JoystickCaps.wXmin));
+        JoystickY = (int)((double)(m_JoystickCaps.wYmax - y) * 65535.0 /
+                          (double)(m_JoystickCaps.wYmax - m_JoystickCaps.wYmin));
+    }
 }
 
 /****************************************************************************/
 void BeebWin::ResetJoystick(void)
 {
-    joyReleaseCapture(JOYSTICKID1);
-    AtoDReset();
+    // joySetCapture() fails after a joyReleaseCapture() call (not sure why)
+    // so leave joystick captured.
+    // joyReleaseCapture(JOYSTICKID1);
+    AtoDDisable();
 }
 
 /****************************************************************************/
@@ -2717,9 +2744,21 @@ void BeebWin::HandleCommand(int MenuId)
     case IDM_ALLOWWRITES_ROMD:
     case IDM_ALLOWWRITES_ROME:
     case IDM_ALLOWWRITES_ROMF:
+    {
+        int slot = MenuId-IDM_ALLOWWRITES_ROM0;
+        RomWritable[slot] = 1-RomWritable[slot];
+        CheckMenuItem(hMenu, MenuId, RomWritable[slot] ? MF_CHECKED : MF_UNCHECKED);
+        break;
+    }
 
-        CheckMenuItem(hMenu,  MenuId, RomWritable[( MenuId-IDM_ALLOWWRITES_ROM0)] ? MF_UNCHECKED : MF_CHECKED );
-        GetRomMenu();   // Update the Rom/Ram state for all the roms.
+    case IDM_SWRAMBOARD:
+        SWRAMBoardEnabled = 1-SWRAMBoardEnabled;
+        CheckMenuItem(hMenu, IDM_SWRAMBOARD, SWRAMBoardEnabled ? MF_CHECKED : MF_UNCHECKED);
+        break;
+
+    case IDM_ROMCONFIG:
+        EditROMConfig();
+        SetRomMenu();
         break;
 
     case IDM_REALTIME:
@@ -2763,7 +2802,7 @@ void BeebWin::HandleCommand(int MenuId)
             }
             else /* mousestick */
             {
-                AtoDReset();
+                AtoDDisable();
             }
         }
 
@@ -2782,7 +2821,7 @@ void BeebWin::HandleCommand(int MenuId)
             }
             else /* mousestick */
             {
-                AtoDInit();
+                AtoDEnable();
             }
             if (JoystickEnabled)
                 CheckMenuItem(hMenu, m_MenuIdSticks, MF_CHECKED);
@@ -3640,7 +3679,10 @@ void BeebWin::CheckForLocalPrefs(const char *path, bool bLoadPrefs)
         // File exists, use it
         strcpy(RomFile, file);
         if (bLoadPrefs)
+        {
+            ReadROMFile(RomFile, RomConfig);
             BeebReadRoms();
+        }
     }
 }
 

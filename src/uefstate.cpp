@@ -33,6 +33,7 @@ Boston, MA  02110-1301, USA.
 #include "disc1770.h"
 #include "tube.h"
 #include "serial.h"
+#include "atodconv.h"
 
 FILE *UEFState;
 
@@ -70,7 +71,7 @@ void SaveUEFState(char *StateName) {
     {
         fprintf(UEFState,"UEF File!");
         fputc(0,UEFState); // UEF Header
-        fputc(11,UEFState); fputc(0,UEFState); // Version
+        fputc(12,UEFState); fputc(0,UEFState); // Version
         mainWin->SaveEmuUEF(UEFState);
         Save6502UEF(UEFState);
         SaveMemUEF(UEFState);
@@ -87,6 +88,7 @@ void SaveUEFState(char *StateName) {
             Save65C02MemUEF(UEFState);
         }
         SaveSerialUEF(UEFState);
+        SaveAtoDUEF(UEFState);
         fclose(UEFState);
     }
     else
@@ -135,7 +137,7 @@ void LoadUEFState(char *StateName) {
             if (Block==0x0463) LoadShadMemUEF(UEFState);
             if (Block==0x0464) LoadPrivMemUEF(UEFState);
             if (Block==0x0465) LoadFileMemUEF(UEFState);
-            if (Block==0x0466) LoadSWRMMemUEF(UEFState);
+            if (Block==0x0466) LoadSWRamMemUEF(UEFState);
             if (Block==0x0467) LoadViaUEF(UEFState);
             if (Block==0x0468) LoadVideoUEF(UEFState);
             if (Block==0x046B) LoadSoundUEF(UEFState);
@@ -146,6 +148,8 @@ void LoadUEFState(char *StateName) {
             if (Block==0x0471) Load65C02UEF(UEFState);
             if (Block==0x0472) Load65C02MemUEF(UEFState);
             if (Block==0x0473) LoadSerialUEF(UEFState);
+            if (Block==0x0474) LoadAtoDUEF(UEFState);
+            if (Block==0x0475) LoadSWRomMemUEF(UEFState);
             fseek(UEFState,CPos+Length,SEEK_SET); // Skip unrecognised blocks (and over any gaps)
         }
 

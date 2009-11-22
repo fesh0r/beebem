@@ -31,7 +31,10 @@ extern int JoystickY;  /* 16 bit number, 0 = down */
 void AtoDWrite(int Address, int Value);
 int AtoDRead(int Address);
 void AtoDInit(void);
-void AtoDReset(void);
+void AtoDEnable(void);
+void AtoDDisable(void);
+void SaveAtoDUEF(FILE *SUEF);
+void LoadAtoDUEF(FILE *SUEF);
 
 extern int AtoDTrigger;  /* For next A to D conversion completion */
 

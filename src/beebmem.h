@@ -27,9 +27,23 @@ Boston, MA  02110-1301, USA.
 #ifndef BEEBMEM_HEADER
 #define BEEBMEM_HEADER
 
-#include "stdio.h"
+#include <stdio.h>
+#include <stdlib.h>
 
-extern int RomWritable[16]; /* Allow writing to ROMs on an individual basis */
+typedef char ROMConfigFile[4][17][_MAX_PATH];
+static const char *BANK_EMPTY = "EMPTY";
+static const char *BANK_RAM = "RAM";
+static const char *ROM_WRITABLE = ":RAM";
+
+typedef enum BankType
+{
+    BankRom,
+    BankRam,
+    BankEmpty
+} BankType;
+
+extern int RomWritable[16]; /* Allow writing to banks on an individual basis */
+extern BankType RomBankType[16]; /* Identifies what is in each bank */
 
 extern unsigned char WholeRam[65536];
 extern unsigned char Roms[16][16384];
@@ -79,9 +93,12 @@ typedef struct RomInfo {
 
 extern struct CMOSType CMOS;
 extern unsigned char Sh_Display,Sh_CPUX,Sh_CPUE,PRAM,FRAM;
-extern char RomPath[512];
-extern char RomFile[512];
 /* End of Master 128 Specific Stuff, note initilised anyway regardless of Model Type in use */
+
+extern ROMConfigFile RomConfig;
+extern char RomPath[_MAX_PATH];
+extern char RomFile[_MAX_PATH];
+
 /* NOTE: Only to be used if 'a' doesn't change the address */
 #define BEEBREADMEM_FAST(a) ((a<0xfc00)?WholeRam[a]:BeebReadMem(a))
 /* as BEEBREADMEM_FAST but then increments a */
@@ -93,6 +110,7 @@ void BeebWriteMem(int Address, unsigned char Value);
 #define BEEBWRITEMEM_DIRECT(Address, Value) WholeRam[Address]=Value;
 char *BeebMemPtrWithWrap(int a, int n);
 char *BeebMemPtrWithWrapMo7(int a, int n);
+bool ReadROMFile(const char *filename, ROMConfigFile RomConfig);
 void BeebReadRoms(void);
 void BeebMemInit(unsigned char LoadRoms,unsigned char SkipIntegraBConfig);
 
@@ -111,7 +129,8 @@ void LoadMainMemUEF(FILE *SUEF);
 void LoadShadMemUEF(FILE *SUEF);
 void LoadPrivMemUEF(FILE *SUEF);
 void LoadFileMemUEF(FILE *SUEF);
-void LoadSWRMMemUEF(FILE *SUEF);
+void LoadSWRamMemUEF(FILE *SUEF);
+void LoadSWRomMemUEF(FILE *SUEF);
 void LoadIntegraBHiddenMemUEF(FILE *SUEF);
 void DebugMemoryState();
 #endif

@@ -1,6 +1,21 @@
 BeebEm Change History
 =====================
 
+Version 4.12 (Mike Wyatt)
+------------
+* Added ROM configuration editor.
+* Updated sideways RAM support:
+  - Changed SW RAM write enable menu to show slots containing RAM and
+    disable the ROM slots.
+  - RAM slots enabled now saved in preferences.
+  - Added write through to the first RAM bank when writing to ROM address
+    range (&8000-&BFFF).
+  - Added SW RAM board emulation where the active RAM bank is selected by
+    the User VIA port B output.
+* Added AtoD to saved state. Joystick should now work after restoring a
+  state file.
+* Fixed joystick capture error when enabled for a second time.
+
 Version 4.11 (Rob O'Donnell, Rich Talbot-Watkins, Mike Wyatt)
 ------------
 * Added AUN Econet support.

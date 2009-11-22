@@ -30,6 +30,7 @@ Boston, MA  02110-1301, USA.
 #include "6502core.h"
 #include "atodconv.h"
 #include "sysvia.h"
+#include "uefstate.h"
 
 int JoystickEnabled = 0;
 
@@ -122,11 +123,14 @@ void AtoD_poll_real(void)
 /*--------------------------------------------------------------------------*/
 void AtoDInit(void)
 {
-    JoystickEnabled = 1;
     AtoDState.datalatch = 0;
     AtoDState.high = 0;
     AtoDState.low = 0;
     ClearTrigger(AtoDTrigger);
+
+    /* Move joystick to middle */
+    JoystickX = 32767;
+    JoystickY = 32767;
 
     /* Not busy, conversion complete (OS1.2 will then request another conversion) */
     AtoDState.status = 0x40;
@@ -134,7 +138,14 @@ void AtoDInit(void)
 }
 
 /*--------------------------------------------------------------------------*/
-void AtoDReset(void)
+void AtoDEnable(void)
+{
+    JoystickEnabled = 1;
+    AtoDInit();
+}
+
+/*--------------------------------------------------------------------------*/
+void AtoDDisable(void)
 {
     JoystickEnabled = 0;
     AtoDState.datalatch = 0;
@@ -146,4 +157,27 @@ void AtoDReset(void)
     /* Move joystick to middle (superpool looks at joystick even when not selected) */
     JoystickX = 32767;
     JoystickY = 32767;
+}
+
+/*--------------------------------------------------------------------------*/
+void SaveAtoDUEF(FILE *SUEF) {
+    fput16(0x0474,SUEF);
+    fput32(8,SUEF);
+    fputc(AtoDState.datalatch,SUEF);
+    fputc(AtoDState.status,SUEF);
+    fputc(AtoDState.high,SUEF);
+    fputc(AtoDState.low,SUEF);
+    if (AtoDTrigger == CycleCountTMax)
+        fput32(AtoDTrigger,SUEF);
+    else
+        fput32(AtoDTrigger - TotalCycles,SUEF);
+}
+void LoadAtoDUEF(FILE *SUEF) {
+    AtoDState.datalatch = fgetc(SUEF);
+    AtoDState.status = fgetc(SUEF);
+    AtoDState.high = fgetc(SUEF);
+    AtoDState.low = fgetc(SUEF);
+    AtoDTrigger = fget32(SUEF);
+    if (AtoDTrigger != CycleCountTMax)
+        AtoDTrigger+=TotalCycles;
 }

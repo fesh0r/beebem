@@ -271,6 +271,7 @@ class BeebWin  {
     int         m_DiscTypeSelection;
     int         m_MenuIdTiming;
     int         m_FPSTarget;
+    BOOL        m_JoystickCaptured;
     JOYCAPS     m_JoystickCaps;
     int         m_MenuIdSticks;
     BOOL        m_HideCursor;
@@ -348,6 +349,7 @@ class BeebWin  {
     int         m_KbdCmdDelay;
     int         m_KbdCmdLastCycles;
     bool        m_NoAutoBoot;
+    unsigned char RomWritePrefs[16];
 
     // Bitmap capture vars
     ULONG_PTR   m_gdiplusToken;
@@ -442,7 +444,6 @@ private:
     void ExitDX9(void);
     void RenderDX9(void);
 
-    void GetRomMenu(void);              // LRW  Added for individual ROM/Ram
     void TranslateWindowSize(void);
     void TranslateSampleRate(void);
     void TranslateVolume(void);
@@ -489,6 +490,7 @@ private:
     bool RegSetBinaryValue(HKEY hKeyRoot, LPSTR lpSubKey, LPSTR lpValue, PVOID pData, int* pnSize);
     bool RegGetStringValue(HKEY hKeyRoot, LPSTR lpSubKey, LPSTR lpValue, LPSTR pData, DWORD dwSize);
     bool RegSetStringValue(HKEY hKeyRoot, LPSTR lpSubKey, LPSTR lpValue, LPSTR pData);
+    void EditROMConfig(void);
 
     // Preferences
     PrefsMap m_Prefs;

@@ -546,9 +546,10 @@ void BeebWin::updateLines(HDC hDC, int starty, int nlines)
 
     if (m_DisplayRenderer == IDM_DISPGDI)
     {
-        int win_nlines = 256 * m_YWinSize / 256;
-
-        TextStart = m_YWinSize - 20;
+        RECT destRect;
+        GetClientRect(m_hWnd, &destRect);
+        int win_nlines = destRect.bottom;
+        TextStart = win_nlines - 20;
 
         StretchBlt(hDC, 0, 0, m_XWinSize, win_nlines,
             m_hDCBitmap, 0, starty, (TeletextEnabled)?552:ActualScreenWidth, (TeletextEnabled==1)?TTLines:nlines, SRCCOPY);
