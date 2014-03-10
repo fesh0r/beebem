@@ -1,0 +1,15 @@
+*~
+*.bak
+.DS_Store
+
+*.aps
+*.exe
+*.dll
+*.o
+*.a
+*.pdb
+*.sdf
+*.opensdf
+*.ilk
+*.suo
+*.user
